@@ -31,6 +31,7 @@ interface Candidate {
   symbol: string;
   side: "BUY" | "SELL";
   rules: string[];
+  status?: string;
 }
 
 interface CandidateCardProps {
@@ -39,6 +40,7 @@ interface CandidateCardProps {
   onExecute: (id: string) => Promise<void>;
   onAdjust: (id: string) => void;
   onIgnore: (id: string) => void;
+  onClick?: (id: string) => void;
 }
 
 type ExecutionStatus = "idle" | "holding" | "sending" | "executed" | "rejected" | "failed";
@@ -48,7 +50,8 @@ export function CandidateCard({
   rank, 
   onExecute, 
   onAdjust, 
-  onIgnore 
+  onIgnore,
+  onClick 
 }: CandidateCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>("idle");

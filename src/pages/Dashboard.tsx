@@ -1,128 +1,97 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { HealthBanner } from "@/components/dashboard/HealthBanner";
 import { RiskSnapshot } from "@/components/dashboard/RiskSnapshot";
 import { StopOutCard } from "@/components/dashboard/StopOutCard";
 import { CandidateCard } from "@/components/dashboard/CandidateCard";
-import { toast } from "sonner";
-
-// Mock data
-const mockHealthMetrics = {
-  dailyPnl: -0.45,
-  realizedR: -1.2,
-  lossStreak: 2,
-  maxDrawdown: 2.3,
-  evi: 35,
-  status: "elevated" as const,
-};
-
-const mockRiskMetrics = {
-  reentriesUsed: 2,
-  maxReentries: 5,
-  cooldownSeconds: 0,
-  manualOverrideActive: false,
-  trustScore: 72,
-  lockedRiskMode: false,
-};
-
-const mockStopOut = {
-  id: "so-1",
-  symbol: "EURUSD",
-  side: "SELL" as const,
-  entryPrice: 1.08542,
-  stopPrice: 1.08742,
-  lots: 0.25,
-  occurredAt: new Date(),
-  session: "London",
-  mode: "live" as const,
-};
-
-const mockRecentStopOuts = [
-  { ...mockStopOut, id: "so-2", symbol: "GBPUSD", side: "BUY" as const },
-  { ...mockStopOut, id: "so-3", symbol: "XAUUSD", side: "SELL" as const },
-];
-
-const mockCandidates = [
-  {
-    id: "c-1",
-    type: "reclaim" as const,
-    entryPrice: 1.08642,
-    slPrice: 1.08442,
-    tpPrice: 1.09042,
-    rrRatio: 2.0,
-    setupScore: 85,
-    personalConfidence: 78,
-    trustContext: "High win session",
-    riskFlags: [],
-    strategyTag: "London Reclaim",
-    symbol: "EURUSD",
-    side: "SELL" as const,
-    rules: [
-      "Price rejected from prior session high",
-      "Momentum aligned with higher timeframe trend",
-      "Clean liquidity sweep above resistance",
-      "Volume confirmation on rejection candle",
-    ],
-  },
-  {
-    id: "c-2",
-    type: "retest" as const,
-    entryPrice: 1.08592,
-    slPrice: 1.08392,
-    tpPrice: 1.08892,
-    rrRatio: 1.5,
-    setupScore: 72,
-    personalConfidence: 65,
-    trustContext: "Moderate setup",
-    riskFlags: ["EVI elevated"],
-    strategyTag: "Structure Retest",
-    symbol: "EURUSD",
-    side: "SELL" as const,
-    rules: [
-      "Key level retest after break",
-      "Lower timeframe bullish rejection",
-      "Session overlap transition",
-    ],
-  },
-  {
-    id: "c-3",
-    type: "ladder" as const,
-    entryPrice: 1.08492,
-    slPrice: 1.08292,
-    tpPrice: 1.08892,
-    rrRatio: 2.0,
-    setupScore: 68,
-    personalConfidence: 55,
-    trustContext: "Extended target",
-    riskFlags: ["High volatility", "News pending"],
-    strategyTag: "Ladder Scale",
-    symbol: "EURUSD",
-    side: "SELL" as const,
-    rules: [
-      "Multiple entry ladder strategy",
-      "Average entry optimization",
-    ],
-  },
-];
+import { TestStopoutButton } from "@/components/dashboard/TestStopoutButton";
+import { AdjustCandidateModal } from "@/components/dashboard/AdjustCandidateModal";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useActiveAccount } from "@/hooks/useActiveAccount";
+import { 
+  useDailyMetrics, 
+  useBehaviorMetrics, 
+  useLatestStopout, 
+  useRecentStopouts,
+  usePendingCandidates 
+} from "@/hooks/useDashboardData";
+import { useCandidateActions } from "@/hooks/useCandidateActions";
+import { AlertCircle } from "lucide-react";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const { activeAccount, accountSettings, loading: accountLoading } = useActiveAccount();
+  const { data: dailyMetrics, isLoading: metricsLoading } = useDailyMetrics();
+  const { data: behaviorMetrics, isLoading: behaviorLoading } = useBehaviorMetrics();
+  const { data: latestStopout, isLoading: stopoutLoading } = useLatestStopout();
+  const { data: recentStopouts, isLoading: recentLoading } = useRecentStopouts(3);
+  const { data: candidates, isLoading: candidatesLoading } = usePendingCandidates();
+  const { execute, ignore, adjust } = useCandidateActions();
+
+  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<{
+    id: string;
+    entryPrice: number;
+    slPrice: number;
+    tpPrice: number;
+    symbol: string;
+  } | null>(null);
+
+  const isLoading = accountLoading || metricsLoading || behaviorLoading;
+
+  // Calculate health status
+  const getHealthStatus = (): "healthy" | "elevated" | "locked" => {
+    if (dailyMetrics?.locked_risk_mode) return "locked";
+    if (behaviorMetrics && behaviorMetrics.evi_score >= 67) return "elevated";
+    return "healthy";
+  };
+
   const handleExecute = async (id: string) => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    toast.success("Re-entry executed successfully", {
-      description: `Order placed for candidate ${id}`,
-    });
+    await execute(id);
   };
 
   const handleAdjust = (id: string) => {
-    toast.info("Opening adjustment panel", {
-      description: `Adjusting candidate ${id}`,
-    });
+    const candidate = candidates?.find(c => c.id === id);
+    if (candidate) {
+      setSelectedCandidate({
+        id: candidate.id,
+        entryPrice: Number(candidate.entry_price),
+        slPrice: Number(candidate.sl_price),
+        tpPrice: Number(candidate.tp_price) || 0,
+        symbol: candidate.stopout_event?.symbol || 'UNKNOWN',
+      });
+      setAdjustModalOpen(true);
+    }
   };
 
-  const handleIgnore = (id: string) => {
-    toast.warning("Candidate ignored", {
-      description: `Candidate ${id} marked as ignored`,
-    });
+  const handleAdjustSave = async (data: { entryPrice: number; slPrice: number; tpPrice: number }) => {
+    if (selectedCandidate) {
+      await adjust({
+        candidateId: selectedCandidate.id,
+        ...data,
+      });
+    }
   };
+
+  const handleIgnore = async (id: string) => {
+    await ignore(id);
+  };
+
+  const handleCandidateClick = (id: string) => {
+    navigate(`/app/candidates/${id}`);
+  };
+
+  if (!activeAccount && !accountLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="text-lg font-semibold">No Account Found</h2>
+        <p className="text-sm text-muted-foreground">
+          Please refresh the page or contact support.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-20 lg:pb-6">
@@ -133,13 +102,76 @@ export default function Dashboard() {
       </div>
 
       {/* Health Banner */}
-      <HealthBanner metrics={mockHealthMetrics} />
+      {isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : (
+        <HealthBanner 
+          metrics={{
+            dailyPnl: Number(dailyMetrics?.realized_pnl) || 0,
+            realizedR: Number(dailyMetrics?.realized_r) || 0,
+            lossStreak: dailyMetrics?.loss_streak || 0,
+            maxDrawdown: Number(dailyMetrics?.max_drawdown) || 0,
+            evi: Number(behaviorMetrics?.evi_score) || 50,
+            status: getHealthStatus(),
+          }} 
+        />
+      )}
 
       {/* Risk Snapshot */}
-      <RiskSnapshot metrics={mockRiskMetrics} />
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : (
+        <RiskSnapshot 
+          metrics={{
+            reentriesUsed: dailyMetrics?.reentries_used || 0,
+            maxReentries: accountSettings?.max_reentries_day || 3,
+            cooldownSeconds: 0, // Would need real-time tracking
+            manualOverrideActive: false,
+            trustScore: Number(behaviorMetrics?.trust_score) || 50,
+            lockedRiskMode: dailyMetrics?.locked_risk_mode || false,
+          }} 
+        />
+      )}
 
       {/* Stop-Out Card */}
-      <StopOutCard event={mockStopOut} recentEvents={mockRecentStopOuts} />
+      {stopoutLoading ? (
+        <Skeleton className="h-48 w-full" />
+      ) : latestStopout ? (
+        <StopOutCard 
+          event={{
+            id: latestStopout.id,
+            symbol: latestStopout.symbol,
+            side: latestStopout.side.toUpperCase() as "BUY" | "SELL",
+            entryPrice: Number(latestStopout.entry_price),
+            stopPrice: Number(latestStopout.stop_price),
+            lots: Number(latestStopout.lots),
+            occurredAt: new Date(latestStopout.occurred_at),
+            session: latestStopout.session_label || 'Unknown',
+            mode: latestStopout.mode as "live" | "test" | "train",
+          }}
+          recentEvents={recentStopouts?.slice(1).map(e => ({
+            id: e.id,
+            symbol: e.symbol,
+            side: e.side.toUpperCase() as "BUY" | "SELL",
+            entryPrice: Number(e.entry_price),
+            stopPrice: Number(e.stop_price),
+            lots: Number(e.lots),
+            occurredAt: new Date(e.occurred_at),
+            session: e.session_label || 'Unknown',
+            mode: e.mode as "live" | "test" | "train",
+          })) || []}
+        />
+      ) : (
+        <div className="glass-card p-6 text-center">
+          <p className="text-muted-foreground">No stop-outs recorded yet.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Create a test stop-out below to see the system in action.
+          </p>
+        </div>
+      )}
+
+      {/* Test Stop-out Button */}
+      <TestStopoutButton />
 
       {/* Candidate Stack */}
       <div className="space-y-3">
@@ -147,22 +179,72 @@ export default function Dashboard() {
           <span className="text-primary">#</span>
           Re-Entry Candidates
           <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
-            {mockCandidates.length}
+            {candidates?.length || 0}
           </span>
         </h2>
-        <div className="space-y-3">
-          {mockCandidates.map((candidate, index) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              rank={index + 1}
-              onExecute={handleExecute}
-              onAdjust={handleAdjust}
-              onIgnore={handleIgnore}
-            />
-          ))}
-        </div>
+        
+        {candidatesLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : candidates && candidates.length > 0 ? (
+          <div className="space-y-3">
+            {candidates.map((candidate, index) => (
+              <CandidateCard
+                key={candidate.id}
+                candidate={{
+                  id: candidate.id,
+                  type: candidate.candidate_type,
+                  entryPrice: Number(candidate.entry_price),
+                  slPrice: Number(candidate.sl_price),
+                  tpPrice: Number(candidate.tp_price) || 0,
+                  rrRatio: Number(candidate.rr_ratio) || 0,
+                  setupScore: Number(candidate.score) || 0,
+                  personalConfidence: Number(candidate.personal_confidence_score) || 0,
+                  trustContext: (candidate.trust_context_json as { session?: string })?.session || 'Standard setup',
+                  riskFlags: (candidate.risk_flags_json as string[]) || [],
+                  strategyTag: candidate.strategy_tag || 'Manual',
+                  symbol: candidate.stopout_event?.symbol || 'UNKNOWN',
+                  side: (candidate.stopout_event?.side?.toUpperCase() || 'BUY') as "BUY" | "SELL",
+                  rules: ['Price rejected from key level', 'Session timing optimal', 'Risk/reward acceptable'],
+                  status: candidate.status,
+                }}
+                rank={index + 1}
+                onExecute={handleExecute}
+                onAdjust={handleAdjust}
+                onIgnore={handleIgnore}
+                onClick={handleCandidateClick}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="glass-card p-6 text-center">
+            <p className="text-muted-foreground">No pending candidates.</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Candidates will appear after a stop-out event.
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Adjust Modal */}
+      {selectedCandidate && (
+        <AdjustCandidateModal
+          isOpen={adjustModalOpen}
+          onClose={() => {
+            setAdjustModalOpen(false);
+            setSelectedCandidate(null);
+          }}
+          onSave={handleAdjustSave}
+          initialValues={{
+            entryPrice: selectedCandidate.entryPrice,
+            slPrice: selectedCandidate.slPrice,
+            tpPrice: selectedCandidate.tpPrice,
+          }}
+          symbol={selectedCandidate.symbol}
+        />
+      )}
     </div>
   );
 }

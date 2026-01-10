@@ -1,33 +1,119 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Shield, Mail, Lock, Eye, EyeOff, Fingerprint, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { bootstrapAccount } from "@/hooks/useAccountBootstrap";
+import { z } from "zod";
+
+const authSchema = z.object({
+  email: z.string().email("Please enter a valid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, signIn, signUp } = useAuth();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // Simulate login
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    toast.success("Welcome back, Trader", {
-      description: "System initialized. Stay disciplined.",
-    });
-    
-    navigate("/");
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/app/dashboard';
+      navigate(from, { replace: true });
+    }
+  }, [user, navigate, location]);
+
+  const validateForm = () => {
+    try {
+      authSchema.parse({ email, password });
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const fieldErrors: { email?: string; password?: string } = {};
+        error.errors.forEach((err) => {
+          if (err.path[0] === 'email') fieldErrors.email = err.message;
+          if (err.path[0] === 'password') fieldErrors.password = err.message;
+        });
+        setErrors(fieldErrors);
+      }
+      return false;
+    }
   };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+
+    try {
+      if (isSignUp) {
+        const { error } = await signUp(email, password);
+        if (error) {
+          if (error.message.includes('already registered')) {
+            toast.error("Account already exists", {
+              description: "Please sign in instead.",
+            });
+          } else {
+            toast.error("Sign up failed", {
+              description: error.message,
+            });
+          }
+          return;
+        }
+        
+        toast.success("Account created!", {
+          description: "Setting up your trading environment...",
+        });
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          if (error.message.includes('Invalid login')) {
+            toast.error("Invalid credentials", {
+              description: "Please check your email and password.",
+            });
+          } else {
+            toast.error("Sign in failed", {
+              description: error.message,
+            });
+          }
+          return;
+        }
+        
+        toast.success("Welcome back, Trader", {
+          description: "System initialized. Stay disciplined.",
+        });
+      }
+    } catch (error) {
+      toast.error("Authentication error", {
+        description: "Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // After successful auth, bootstrap account
+  useEffect(() => {
+    if (user) {
+      bootstrapAccount(user.id).then(() => {
+        navigate('/app/dashboard');
+      });
+    }
+  }, [user, navigate]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
@@ -56,9 +142,11 @@ export default function Login() {
 
         {/* Login Card */}
         <div className="glass-card-elevated w-full max-w-md p-6 sm:p-8">
-          <h2 className="mb-6 text-center text-xl font-semibold">Welcome Back</h2>
+          <h2 className="mb-6 text-center text-xl font-semibold">
+            {isSignUp ? "Create Account" : "Welcome Back"}
+          </h2>
           
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -74,6 +162,9 @@ export default function Login() {
                   required
                 />
               </div>
+              {errors.email && (
+                <p className="text-xs text-danger">{errors.email}</p>
+              )}
             </div>
 
             {/* Password */}
@@ -98,23 +189,9 @@ export default function Login() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-            </div>
-
-            {/* Remember & Forgot */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="remember" 
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked === true)}
-                />
-                <label htmlFor="remember" className="text-sm text-muted-foreground">
-                  Remember me
-                </label>
-              </div>
-              <a href="#" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </a>
+              {errors.password && (
+                <p className="text-xs text-danger">{errors.password}</p>
+              )}
             </div>
 
             {/* Submit */}
@@ -128,41 +205,54 @@ export default function Login() {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  Authenticating...
+                  {isSignUp ? "Creating Account..." : "Authenticating..."}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  Sign In
-                  <ArrowRight className="h-4 w-4" />
+                  {isSignUp ? (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      Create Account
+                    </>
+                  ) : (
+                    <>
+                      Sign In
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </div>
               )}
             </Button>
           </form>
 
-          {/* Biometric */}
+          {/* Toggle Sign Up / Sign In */}
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-border" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                <span className="bg-card px-2 text-muted-foreground">
+                  {isSignUp ? "Already have an account?" : "New to RRE OS?"}
+                </span>
               </div>
             </div>
 
             <Button
               variant="outline"
-              className="mt-4 w-full gap-2"
-              onClick={() => toast.info("Biometric authentication", { description: "Feature coming soon" })}
+              className="mt-4 w-full"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setErrors({});
+              }}
             >
-              <Fingerprint className="h-5 w-5" />
-              Use Biometric
+              {isSignUp ? "Sign In Instead" : "Create an Account"}
             </Button>
           </div>
 
           {/* Footer */}
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            By signing in, you agree to our Terms of Service and acknowledge our Privacy Policy.
+            By signing in, you acknowledge that this system does NOT guarantee profits and all trading decisions are your responsibility.
           </p>
         </div>
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   ChevronDown, 
   Shield, 
@@ -6,7 +7,8 @@ import {
   User, 
   Settings,
   Bell,
-  Menu
+  Menu,
+  LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,35 +31,68 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
-interface Account {
-  id: string;
-  label: string;
-  type: "funded" | "personal" | "sandbox";
-  isActive: boolean;
-}
-
-const mockAccounts: Account[] = [
-  { id: "1", label: "FTMO Challenge", type: "funded", isActive: true },
-  { id: "2", label: "Personal Live", type: "personal", isActive: false },
-  { id: "3", label: "Strategy Test", type: "sandbox", isActive: false },
-];
+import { useAuth } from "@/hooks/useAuth";
+import { useActiveAccount } from "@/hooks/useActiveAccount";
+import { useKillSwitch } from "@/hooks/useDashboardData";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface GlobalHeaderProps {
   onMenuClick?: () => void;
 }
 
 export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
-  const [accounts] = useState<Account[]>(mockAccounts);
-  const [activeAccount, setActiveAccount] = useState(accounts[0]);
-  const [riskProfile] = useState<"conservative" | "normal" | "aggressive">("normal");
-  const [mode] = useState<"assist" | "auto" | "safe">("assist");
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const { accounts, activeAccount, accountSettings, setActiveAccountId, loading } = useActiveAccount();
+  const { data: killSwitch } = useKillSwitch();
 
-  const getAccountTypeColor = (type: Account["type"]) => {
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const handleKillSwitch = async () => {
+    if (!activeAccount) return;
+
+    try {
+      const { error } = await supabase
+        .from('kill_switch')
+        .update({
+          is_active: true,
+          activated_at: new Date().toISOString(),
+          reason: 'Emergency stop by user',
+        })
+        .eq('account_id', activeAccount.id);
+
+      if (error) throw error;
+
+      toast.error("Kill Switch Activated", {
+        description: "All trading operations have been halted.",
+      });
+    } catch (error) {
+      console.error('Error activating kill switch:', error);
+      toast.error("Failed to activate kill switch");
+    }
+  };
+
+  const getAccountTypeLabel = (account: typeof activeAccount) => {
+    if (!account) return 'personal';
+    if (account.label.toLowerCase().includes('funded') || account.label.toLowerCase().includes('ftmo')) {
+      return 'funded';
+    }
+    if (account.label.toLowerCase().includes('sandbox') || account.label.toLowerCase().includes('test')) {
+      return 'sandbox';
+    }
+    return 'personal';
+  };
+
+  const getAccountTypeColor = (type: string) => {
     switch (type) {
       case "funded": return "text-success";
       case "personal": return "text-primary";
       case "sandbox": return "text-warning";
+      default: return "text-primary";
     }
   };
 
@@ -91,36 +126,55 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
           {/* Account Switcher */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2 text-sm">
-                <span className={getAccountTypeColor(activeAccount.type)}>●</span>
-                <span className="max-w-[120px] truncate">{activeAccount.label}</span>
+              <Button variant="ghost" className="gap-2 text-sm" disabled={loading}>
+                {activeAccount ? (
+                  <>
+                    <span className={getAccountTypeColor(getAccountTypeLabel(activeAccount))}>●</span>
+                    <span className="max-w-[120px] truncate">{activeAccount.label}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">No Account</span>
+                )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56">
               <DropdownMenuLabel>Switch Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {accounts.map((account) => (
-                <DropdownMenuItem
-                  key={account.id}
-                  onClick={() => setActiveAccount(account)}
-                  className="gap-2"
-                >
-                  <span className={getAccountTypeColor(account.type)}>●</span>
-                  <span className="flex-1">{account.label}</span>
-                  <Badge variant="outline" className="text-[10px] capitalize">
-                    {account.type}
-                  </Badge>
-                </DropdownMenuItem>
-              ))}
+              {accounts.map((account) => {
+                const type = getAccountTypeLabel(account);
+                return (
+                  <DropdownMenuItem
+                    key={account.id}
+                    onClick={() => setActiveAccountId(account.id)}
+                    className="gap-2"
+                  >
+                    <span className={getAccountTypeColor(type)}>●</span>
+                    <span className="flex-1">{account.label}</span>
+                    <Badge variant="outline" className="text-[10px] capitalize">
+                      {account.is_demo ? 'demo' : 'live'}
+                    </Badge>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
         {/* Center - Badges */}
         <div className="hidden items-center gap-2 md:flex">
-          <Badge variant={riskProfile}>{riskProfile}</Badge>
-          <Badge variant={mode}>{mode}</Badge>
+          {activeAccount && (
+            <Badge variant={activeAccount.risk_profile}>{activeAccount.risk_profile}</Badge>
+          )}
+          {accountSettings && (
+            <Badge variant={accountSettings.mode}>{accountSettings.mode}</Badge>
+          )}
+          {killSwitch?.is_active && (
+            <Badge variant="locked" className="gap-1 animate-pulse">
+              <Power className="h-3 w-3" />
+              KILLED
+            </Badge>
+          )}
         </div>
 
         {/* Right Section */}
@@ -128,9 +182,6 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
           {/* Notifications */}
           <Button variant="ghost" size="icon-sm" className="relative">
             <Bell className="h-4 w-4" />
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-danger-foreground">
-              2
-            </span>
           </Button>
 
           {/* Kill Switch */}
@@ -140,6 +191,7 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
                 variant="kill" 
                 size="sm"
                 className="hidden gap-1.5 sm:inline-flex"
+                disabled={killSwitch?.is_active}
               >
                 <Power className="h-3.5 w-3.5" />
                 <span className="text-xs">KILL</span>
@@ -152,13 +204,16 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
                   Emergency Kill Switch
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will immediately halt all trading operations, close pending orders, 
-                  and lock the system. This action cannot be undone without admin intervention.
+                  This will immediately halt all trading operations for the active account.
+                  You can reactivate trading from the Settings page.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction className="bg-danger hover:bg-danger/90">
+                <AlertDialogAction 
+                  className="bg-danger hover:bg-danger/90"
+                  onClick={handleKillSwitch}
+                >
                   Confirm Kill
                 </AlertDialogAction>
               </AlertDialogFooter>
@@ -175,17 +230,13 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/app/settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-danger">
-                <Power className="mr-2 h-4 w-4" />
+              <DropdownMenuItem className="text-danger" onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -195,8 +246,22 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
 
       {/* Mobile badges */}
       <div className="flex items-center gap-2 border-t border-border/30 px-4 py-2 md:hidden">
-        <Badge variant={riskProfile} className="text-[10px]">{riskProfile}</Badge>
-        <Badge variant={mode} className="text-[10px]">{mode}</Badge>
+        {activeAccount && (
+          <Badge variant={activeAccount.risk_profile} className="text-[10px]">
+            {activeAccount.risk_profile}
+          </Badge>
+        )}
+        {accountSettings && (
+          <Badge variant={accountSettings.mode} className="text-[10px]">
+            {accountSettings.mode}
+          </Badge>
+        )}
+        {killSwitch?.is_active && (
+          <Badge variant="locked" className="text-[10px] gap-1">
+            <Power className="h-3 w-3" />
+            KILLED
+          </Badge>
+        )}
       </div>
     </header>
   );
