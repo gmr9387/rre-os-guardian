@@ -49,10 +49,10 @@ export function useCandidateActions() {
 
       if (!activeAccount) throw new Error('No account');
 
-      // Update candidate status
+      // Update candidate status to confirmed (not executed - that happens after broker confirms)
       const { error: candidateError } = await supabase
         .from('reentry_candidates')
-        .update({ status: 'executed' })
+        .update({ status: 'pending' }) // Keep as pending, execution record tracks state
         .eq('id', candidateId);
 
       if (candidateError) throw candidateError;

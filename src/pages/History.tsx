@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { 
-  Calendar, 
-  Filter, 
-  TrendingUp, 
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useActiveAccount } from "@/hooks/useActiveAccount";
+import {
+  Filter,
+  TrendingUp,
   TrendingDown,
   Search,
-  ChevronRight
+  ChevronRight,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -18,98 +23,68 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { statusToVariant, candidateTypeToVariant, sideToVariant } from "@/lib/badgeMaps";
 
-interface HistoryEntry {
-  id: string;
-  symbol: string;
-  side: "BUY" | "SELL";
-  type: "reclaim" | "retest" | "ladder";
-  score: number;
-  rr: number;
-  confidence: number;
-  outcome: "win" | "loss" | "be";
-  realizedR: number;
-  date: Date;
-  account: string;
-}
-
-const mockHistory: HistoryEntry[] = [
-  {
-    id: "h-1",
-    symbol: "EURUSD",
-    side: "SELL",
-    type: "reclaim",
-    score: 85,
-    rr: 2.0,
-    confidence: 78,
-    outcome: "win",
-    realizedR: 1.8,
-    date: new Date(),
-    account: "FTMO Challenge",
-  },
-  {
-    id: "h-2",
-    symbol: "GBPUSD",
-    side: "BUY",
-    type: "retest",
-    score: 72,
-    rr: 1.5,
-    confidence: 65,
-    outcome: "loss",
-    realizedR: -1.0,
-    date: new Date(Date.now() - 86400000),
-    account: "FTMO Challenge",
-  },
-  {
-    id: "h-3",
-    symbol: "XAUUSD",
-    side: "SELL",
-    type: "ladder",
-    score: 68,
-    rr: 2.5,
-    confidence: 55,
-    outcome: "win",
-    realizedR: 2.2,
-    date: new Date(Date.now() - 172800000),
-    account: "Personal Live",
-  },
-  {
-    id: "h-4",
-    symbol: "NAS100",
-    side: "BUY",
-    type: "reclaim",
-    score: 90,
-    rr: 1.8,
-    confidence: 82,
-    outcome: "be",
-    realizedR: 0,
-    date: new Date(Date.now() - 259200000),
-    account: "FTMO Challenge",
-  },
-];
+const PAGE_SIZE = 25;
 
 export default function History() {
+  const { activeAccount } = useActiveAccount();
+  const navigate = useNavigate();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [outcomeFilter, setOutcomeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(0);
 
-  const filteredHistory = mockHistory.filter((entry) => {
-    const matchesSearch = entry.symbol.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === "all" || entry.type === typeFilter;
-    const matchesOutcome = outcomeFilter === "all" || entry.outcome === outcomeFilter;
-    return matchesSearch && matchesType && matchesOutcome;
+  // Fetch candidates with stopout data
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['history', activeAccount?.id, page],
+    queryFn: async () => {
+      if (!activeAccount) return { candidates: [], hasMore: false };
+
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE;
+
+      const { data, error, count } = await supabase
+        .from('reentry_candidates')
+        .select(`
+          *,
+          stopout_event:stopout_events(symbol, side, occurred_at)
+        `, { count: 'exact' })
+        .eq('account_id', activeAccount.id)
+        .order('created_at', { ascending: false })
+        .range(from, to - 1);
+
+      if (error) throw error;
+
+      return {
+        candidates: data || [],
+        hasMore: count ? from + PAGE_SIZE < count : false,
+        total: count || 0,
+      };
+    },
+    enabled: !!activeAccount,
   });
 
-  const getOutcomeConfig = (outcome: HistoryEntry["outcome"]) => {
-    switch (outcome) {
-      case "win":
-        return { label: "Win", color: "text-success", bg: "bg-success/20" };
-      case "loss":
-        return { label: "Loss", color: "text-danger", bg: "bg-danger/20" };
-      case "be":
-        return { label: "B/E", color: "text-muted-foreground", bg: "bg-muted" };
-    }
-  };
+  // Filter candidates client-side
+  const filteredCandidates = (data?.candidates || []).filter((c) => {
+    const stopout = c.stopout_event as { symbol: string; side: string } | null;
+    const symbol = stopout?.symbol || '';
+
+    const matchesSearch = symbol.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === "all" || c.candidate_type === typeFilter;
+    const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  if (!activeAccount) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-muted-foreground">No account selected</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-20 lg:pb-6">
@@ -118,13 +93,9 @@ export default function History() {
         <div>
           <h1 className="text-xl font-bold">Trade History</h1>
           <p className="text-sm text-muted-foreground">
-            {filteredHistory.length} re-entries recorded
+            {data?.total || 0} re-entry candidates
           </p>
         </div>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Calendar className="h-4 w-4" />
-          Date Range
-        </Button>
       </div>
 
       {/* Filters */}
@@ -150,103 +121,134 @@ export default function History() {
               <SelectItem value="ladder">Ladder</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-full sm:w-[140px]">
-              <SelectValue placeholder="Outcome" />
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Outcomes</SelectItem>
-              <SelectItem value="win">Wins</SelectItem>
-              <SelectItem value="loss">Losses</SelectItem>
-              <SelectItem value="be">Break Even</SelectItem>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="executed">Executed</SelectItem>
+              <SelectItem value="ignored">Ignored</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="blocked">Blocked</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
+      )}
+
       {/* History List */}
-      <div className="space-y-2">
-        {filteredHistory.map((entry) => {
-          const outcomeConfig = getOutcomeConfig(entry.outcome);
-          return (
-            <div
-              key={entry.id}
-              className="glass-card flex items-center gap-4 p-4 transition-colors hover:bg-accent/50"
-            >
-              {/* Symbol & Direction */}
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "flex h-10 w-10 items-center justify-center rounded-lg",
-                  entry.side === "BUY" ? "bg-success/20" : "bg-danger/20"
-                )}>
-                  {entry.side === "BUY" ? (
-                    <TrendingUp className="h-5 w-5 text-success" />
-                  ) : (
-                    <TrendingDown className="h-5 w-5 text-danger" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium">{entry.symbol}</span>
-                    <Badge variant={entry.type} className="text-[10px]">
-                      {entry.type}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {entry.date.toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+      {!isLoading && (
+        <div className="space-y-2">
+          {filteredCandidates.map((candidate) => {
+            const stopout = candidate.stopout_event as { symbol: string; side: string; occurred_at: string } | null;
 
-              {/* Metrics */}
-              <div className="hidden flex-1 grid-cols-4 gap-4 sm:grid">
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Score</p>
-                  <span className="font-mono font-medium">{entry.score}</span>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">RR</p>
-                  <span className="font-mono font-medium">{entry.rr.toFixed(1)}</span>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Confidence</p>
-                  <span className="font-mono font-medium">{entry.confidence}%</span>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Realized R</p>
-                  <span className={cn(
-                    "font-mono font-medium",
-                    entry.realizedR > 0 ? "text-success" : entry.realizedR < 0 ? "text-danger" : "text-muted-foreground"
+            return (
+              <button
+                key={candidate.id}
+                onClick={() => navigate(`/app/candidates/${candidate.id}`)}
+                className="glass-card flex w-full items-center gap-4 p-4 text-left transition-colors hover:bg-accent/50"
+              >
+                {/* Symbol & Direction */}
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "flex h-10 w-10 items-center justify-center rounded-lg",
+                    stopout?.side?.toLowerCase() === "buy" ? "bg-success/20" : "bg-danger/20"
                   )}>
-                    {entry.realizedR > 0 ? "+" : ""}{entry.realizedR.toFixed(1)}R
-                  </span>
+                    {stopout?.side?.toLowerCase() === "buy" ? (
+                      <TrendingUp className="h-5 w-5 text-success" />
+                    ) : (
+                      <TrendingDown className="h-5 w-5 text-danger" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-medium">{stopout?.symbol || 'Unknown'}</span>
+                      <Badge variant={candidateTypeToVariant(candidate.candidate_type)} className="text-[10px]">
+                        {candidate.candidate_type}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(candidate.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Outcome */}
-              <div className={cn(
-                "flex h-8 items-center rounded-full px-3",
-                outcomeConfig.bg
-              )}>
-                <span className={cn("text-sm font-medium", outcomeConfig.color)}>
-                  {outcomeConfig.label}
-                </span>
-              </div>
+                {/* Metrics */}
+                <div className="hidden flex-1 grid-cols-4 gap-4 sm:grid">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Score</p>
+                    <span className="font-mono font-medium">{candidate.score?.toFixed(0) || '-'}</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">RR</p>
+                    <span className="font-mono font-medium">{candidate.rr_ratio?.toFixed(1) || '-'}</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Confidence</p>
+                    <span className="font-mono font-medium">{candidate.personal_confidence_score?.toFixed(0) || '-'}%</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Entry</p>
+                    <span className="font-mono font-medium text-xs">{Number(candidate.entry_price).toFixed(5)}</span>
+                  </div>
+                </div>
 
-              {/* Arrow */}
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </div>
-          );
-        })}
-      </div>
+                {/* Status */}
+                <Badge variant={statusToVariant(candidate.status)}>
+                  {candidate.status}
+                </Badge>
 
-      {filteredHistory.length === 0 && (
+                {/* Arrow */}
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && filteredCandidates.length === 0 && (
         <div className="glass-card flex flex-col items-center justify-center py-12 text-center">
           <Filter className="h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 font-medium">No trades found</h3>
+          <h3 className="mt-4 font-medium">No candidates found</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Adjust your filters or search query
+            {data?.total === 0
+              ? "Create a test stop-out from the Dashboard to get started"
+              : "Adjust your filters or search query"}
           </p>
+          {data?.total === 0 && (
+            <Button
+              variant="outline"
+              className="mt-4 gap-2"
+              onClick={() => navigate('/app/dashboard')}
+            >
+              <Plus className="h-4 w-4" />
+              Go to Dashboard
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Load More */}
+      {!isLoading && data?.hasMore && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={isFetching}
+          >
+            {isFetching ? 'Loading...' : 'Load More'}
+          </Button>
         </div>
       )}
     </div>
