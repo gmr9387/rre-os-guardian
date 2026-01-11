@@ -9,11 +9,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: History, label: "History", path: "/history" },
-  { icon: BookOpen, label: "Playbook", path: "/playbook" },
-  { icon: BarChart3, label: "Insights", path: "/insights" },
-  { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+  { icon: History, label: "History", path: "/app/history" },
+  { icon: BookOpen, label: "Playbook", path: "/app/playbook" },
+  { icon: BarChart3, label: "Insights", path: "/app/insights" },
+  { icon: Settings, label: "Settings", path: "/app/settings" },
 ];
 
 export function BottomNav() {
@@ -23,7 +23,8 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/80 backdrop-blur-xl lg:hidden">
       <div className="flex items-center justify-around">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = location.pathname === item.path || 
+            (item.path === '/app/dashboard' && location.pathname === '/app');
           return (
             <Link
               key={item.path}

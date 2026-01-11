@@ -12,11 +12,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: History, label: "History", path: "/history" },
-  { icon: BookOpen, label: "Playbook", path: "/playbook" },
-  { icon: BarChart3, label: "Insights", path: "/insights" },
-  { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/app/dashboard" },
+  { icon: History, label: "History", path: "/app/history" },
+  { icon: BookOpen, label: "Playbook", path: "/app/playbook" },
+  { icon: BarChart3, label: "Insights", path: "/app/insights" },
+  { icon: Settings, label: "Settings", path: "/app/settings" },
 ];
 
 interface SidebarProps {
@@ -65,7 +65,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="p-4">
           <ul className="space-y-1">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
+              const isActive = location.pathname === item.path || 
+                (item.path === '/app/dashboard' && location.pathname === '/app');
               return (
                 <li key={item.path}>
                   <Link

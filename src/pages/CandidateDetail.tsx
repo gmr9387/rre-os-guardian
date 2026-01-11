@@ -5,7 +5,8 @@ import { useActiveAccount } from "@/hooks/useActiveAccount";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Target, TrendingUp, Shield, Clock, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle } from "lucide-react";
+import { statusToVariant, candidateTypeToVariant } from "@/lib/badgeMaps";
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ export default function CandidateDetail() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             {stopout?.symbol || 'Unknown'}
-            <Badge variant={candidate.candidate_type as 'reclaim' | 'retest' | 'ladder'}>
+            <Badge variant={candidateTypeToVariant(candidate.candidate_type)}>
               {candidate.candidate_type}
             </Badge>
           </h1>
@@ -81,7 +82,7 @@ export default function CandidateDetail() {
           <div><p className="metric-label">RR</p><span className="metric-value">{Number(candidate.rr_ratio).toFixed(1)}</span></div>
           <div><p className="metric-label">Score</p><span className="metric-value">{Number(candidate.score).toFixed(0)}</span></div>
           <div><p className="metric-label">Confidence</p><span className="metric-value">{Number(candidate.personal_confidence_score).toFixed(0)}%</span></div>
-          <div><p className="metric-label">Status</p><Badge variant={candidate.status === 'executed' ? 'success' : 'outline'}>{candidate.status}</Badge></div>
+          <div><p className="metric-label">Status</p><Badge variant={statusToVariant(candidate.status)}>{candidate.status}</Badge></div>
           <div><p className="metric-label">Strategy</p><span className="text-sm">{candidate.strategy_tag}</span></div>
         </div>
       </div>
