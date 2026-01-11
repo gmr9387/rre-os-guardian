@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Clock, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { modeToVariant } from "@/lib/badgeMaps";
 import { cn } from "@/lib/utils";
 
 interface StopOutEvent {
@@ -58,7 +59,7 @@ export function StopOutCard({ event, recentEvents = [] }: StopOutCardProps) {
               <p className="text-xs text-muted-foreground">Latest Stop-Out</p>
             </div>
           </div>
-          <Badge variant={mode}>{mode.toUpperCase()}</Badge>
+          <Badge variant={modeToVariant(mode)}>{mode.toUpperCase()}</Badge>
         </div>
       </div>
 

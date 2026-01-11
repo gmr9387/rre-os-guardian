@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { statusToVariant, candidateTypeToVariant, sideToVariant } from "@/lib/badgeMaps";
+import { statusToVariant, statusToLabel, candidateTypeToVariant } from "@/lib/badgeMaps";
 
 const PAGE_SIZE = 25;
 
@@ -128,7 +128,7 @@ export default function History() {
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="executed">Executed</SelectItem>
+              <SelectItem value="executed">Confirmed</SelectItem>
               <SelectItem value="ignored">Ignored</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
               <SelectItem value="blocked">Blocked</SelectItem>
@@ -205,7 +205,7 @@ export default function History() {
 
                 {/* Status */}
                 <Badge variant={statusToVariant(candidate.status)}>
-                  {candidate.status}
+                  {statusToLabel(candidate.status)}
                 </Badge>
 
                 {/* Arrow */}

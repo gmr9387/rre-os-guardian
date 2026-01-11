@@ -146,7 +146,7 @@ export function CandidateCard({
         return (
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4" />
-            <span>Executed</span>
+            <span>Confirmed</span>
           </div>
         );
       case "rejected":
