@@ -35,6 +35,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
 import { useKillSwitch } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
+import { modeToVariant, riskToVariant } from "@/lib/badgeMaps";
 import { toast } from "sonner";
 
 interface GlobalHeaderProps {
@@ -164,10 +165,10 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
         {/* Center - Badges */}
         <div className="hidden items-center gap-2 md:flex">
           {activeAccount && (
-            <Badge variant={activeAccount.risk_profile}>{activeAccount.risk_profile}</Badge>
+            <Badge variant={riskToVariant(activeAccount.risk_profile)}>{activeAccount.risk_profile}</Badge>
           )}
           {accountSettings && (
-            <Badge variant={accountSettings.mode}>{accountSettings.mode}</Badge>
+            <Badge variant={modeToVariant(accountSettings.mode)}>{accountSettings.mode}</Badge>
           )}
           {killSwitch?.is_active && (
             <Badge variant="locked" className="gap-1 animate-pulse">
@@ -247,12 +248,12 @@ export function GlobalHeader({ onMenuClick }: GlobalHeaderProps) {
       {/* Mobile badges */}
       <div className="flex items-center gap-2 border-t border-border/30 px-4 py-2 md:hidden">
         {activeAccount && (
-          <Badge variant={activeAccount.risk_profile} className="text-[10px]">
+          <Badge variant={riskToVariant(activeAccount.risk_profile)} className="text-[10px]">
             {activeAccount.risk_profile}
           </Badge>
         )}
         {accountSettings && (
-          <Badge variant={accountSettings.mode} className="text-[10px]">
+          <Badge variant={modeToVariant(accountSettings.mode)} className="text-[10px]">
             {accountSettings.mode}
           </Badge>
         )}
