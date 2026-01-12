@@ -2,30 +2,7 @@
 // Source of truth: src/components/ui/badge.tsx (badgeVariants.variants.variant keys)
 
 import type { Database } from "@/integrations/supabase/types";
-
-export type BadgeVariant =
-  | "default"
-  | "secondary"
-  | "destructive"
-  | "outline"
-  | "assist"
-  | "auto"
-  | "safe"
-  | "conservative"
-  | "normal"
-  | "aggressive"
-  | "healthy"
-  | "elevated"
-  | "locked"
-  | "buy"
-  | "sell"
-  | "live"
-  | "test"
-  | "train"
-  | "reclaim"
-  | "retest"
-  | "ladder"
-  | "warning";
+import type { BadgeVariant } from "@/components/ui/badge";
 
 // Re-export the candidate_status enum type from database
 export type CandidateStatus = Database["public"]["Enums"]["candidate_status"];
