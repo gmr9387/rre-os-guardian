@@ -46,6 +46,6 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 
-export type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
+export type BadgeVariant = NonNullable<React.ComponentProps<typeof Badge>["variant"]>;
 
 export { Badge, badgeVariants };
