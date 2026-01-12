@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, CheckCircle } from "lucide-react";
-import { statusToVariant, statusToLabel, candidateTypeToVariant } from "@/lib/badgeMaps";
+import { candidateTypeToVariant } from "@/lib/badgeMaps";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 export default function CandidateDetail() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +83,7 @@ export default function CandidateDetail() {
           <div><p className="metric-label">RR</p><span className="metric-value">{Number(candidate.rr_ratio).toFixed(1)}</span></div>
           <div><p className="metric-label">Score</p><span className="metric-value">{Number(candidate.score).toFixed(0)}</span></div>
           <div><p className="metric-label">Confidence</p><span className="metric-value">{Number(candidate.personal_confidence_score).toFixed(0)}%</span></div>
-          <div><p className="metric-label">Status</p><Badge variant={statusToVariant(candidate.status)}>{statusToLabel(candidate.status)}</Badge></div>
+          <div><p className="metric-label">Status</p><StatusBadge status={candidate.status} /></div>
           <div><p className="metric-label">Strategy</p><span className="text-sm">{candidate.strategy_tag}</span></div>
         </div>
       </div>
