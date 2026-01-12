@@ -1,6 +1,8 @@
 // Badge variant mapping helpers for type-safe Badge usage.
 // Source of truth: src/components/ui/badge.tsx (badgeVariants.variants.variant keys)
 
+import type { Database } from "@/integrations/supabase/types";
+
 export type BadgeVariant =
   | "default"
   | "secondary"
@@ -25,8 +27,11 @@ export type BadgeVariant =
   | "ladder"
   | "warning";
 
+// Re-export the candidate_status enum type from database
+export type CandidateStatus = Database["public"]["Enums"]["candidate_status"];
+
 // Candidate status (DB values) => badge variants
-export function statusToVariant(status: string): BadgeVariant {
+export function statusToVariant(status: CandidateStatus): BadgeVariant {
   switch (status) {
     case "blocked":
       return "destructive";
@@ -44,7 +49,7 @@ export function statusToVariant(status: string): BadgeVariant {
 }
 
 // Candidate status (DB values) => display labels
-export function statusToLabel(status: string): string {
+export function statusToLabel(status: CandidateStatus): string {
   switch (status) {
     case "executed":
       return "Confirmed";

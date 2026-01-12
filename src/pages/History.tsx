@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { statusToVariant, statusToLabel, candidateTypeToVariant } from "@/lib/badgeMaps";
+import { candidateTypeToVariant } from "@/lib/badgeMaps";
+import { StatusBadge } from "@/components/common/StatusBadge";
 
 const PAGE_SIZE = 25;
 
@@ -204,9 +205,7 @@ export default function History() {
                 </div>
 
                 {/* Status */}
-                <Badge variant={statusToVariant(candidate.status)}>
-                  {statusToLabel(candidate.status)}
-                </Badge>
+                <StatusBadge status={candidate.status} />
 
                 {/* Arrow */}
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
