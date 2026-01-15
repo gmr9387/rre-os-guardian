@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
+import { useBrokerConnection } from "@/hooks/useBrokerConnection";
 import {
   Settings as SettingsIcon,
   Shield,
@@ -12,6 +13,11 @@ import {
   RotateCw,
   Plus,
   User,
+  Plug,
+  ChevronDown,
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +43,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -68,6 +79,19 @@ export default function Settings() {
   // Webhook secret state
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [newSecret, setNewSecret] = useState("");
+
+  // Broker connection
+  const {
+    brokerConnection,
+    loading: brokerLoading,
+    setEnvironment,
+    runCheck,
+    isUpdating: brokerUpdating,
+    isChecking: brokerChecking,
+  } = useBrokerConnection();
+
+  // Broker help
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Fetch account settings
   const { data: accountSettings, isLoading: settingsLoading } = useQuery({
@@ -327,6 +351,32 @@ export default function Settings() {
     toast.success("Secret copied to clipboard");
   };
 
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "connected":
+        return (
+          <Badge variant="default" className="gap-1">
+            <CheckCircle className="h-3 w-3" />
+            Connected
+          </Badge>
+        );
+      case "error":
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <XCircle className="h-3 w-3" />
+            Error
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="gap-1">
+            <XCircle className="h-3 w-3" />
+            Disconnected
+          </Badge>
+        );
+    }
+  };
+
   if (!activeAccount) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -359,9 +409,10 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="account" className="space-y-4">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="rules">Risk Rules</TabsTrigger>
+          <TabsTrigger value="broker">Broker</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
@@ -540,6 +591,150 @@ export default function Settings() {
             >
               Save Risk Rules
             </Button>
+          </div>
+        </TabsContent>
+
+        {/* Broker Tab */}
+        <TabsContent value="broker" className="space-y-4">
+          <div className="glass-card p-4 space-y-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+                <Plug className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-medium">Broker Connection</h3>
+                <p className="text-xs text-muted-foreground">Connect to your trading broker</p>
+              </div>
+            </div>
+
+            {brokerLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : (
+              <>
+                {/* Broker Selection */}
+                <div className="space-y-2">
+                  <Label>Broker</Label>
+                  <Select value="alpaca" disabled>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alpaca">Alpaca (Stock + Options)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">More brokers coming soon</p>
+                </div>
+
+                {/* Environment Toggle */}
+                <div className="space-y-2">
+                  <Label>Environment</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setEnvironment("paper")}
+                      disabled={brokerUpdating}
+                      className={cn(
+                        "rounded-lg border-2 p-3 text-center transition-all",
+                        brokerConnection?.environment === "paper"
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <div className="font-medium">Paper</div>
+                      <div className="text-xs text-muted-foreground">Test trading</div>
+                    </button>
+                    <button
+                      onClick={() => setEnvironment("live")}
+                      disabled={brokerUpdating}
+                      className={cn(
+                        "rounded-lg border-2 p-3 text-center transition-all",
+                        brokerConnection?.environment === "live"
+                          ? "border-success bg-success/10"
+                          : "border-border hover:border-success/50"
+                      )}
+                    >
+                      <div className="font-medium">Live</div>
+                      <div className="text-xs text-muted-foreground">Real money</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className="space-y-2">
+                  <Label>Connection Status</Label>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="flex items-center gap-3">
+                      {getStatusBadge(brokerConnection?.status || "disconnected")}
+                      {brokerConnection?.last_checked_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Last checked: {new Date(brokerConnection.last_checked_at).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Connection Check Button */}
+                <Button
+                  onClick={runCheck}
+                  disabled={brokerChecking}
+                  variant="outline"
+                  className="w-full gap-2"
+                >
+                  {brokerChecking ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Plug className="h-4 w-4" />
+                      Run Connection Check
+                    </>
+                  )}
+                </Button>
+
+                {/* Warning for Live mode */}
+                {brokerConnection?.environment === "live" && brokerConnection?.status !== "connected" && (
+                  <div className="flex items-center gap-2 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                    <span>Live trading requires broker credentials configured via n8n integration.</span>
+                  </div>
+                )}
+
+                {/* Help Collapsible */}
+                <Collapsible open={helpOpen} onOpenChange={setHelpOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-between">
+                      <span>How to Connect</span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", helpOpen && "rotate-180")} />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 pt-3">
+                    <div className="rounded-lg border p-3 text-sm space-y-2">
+                      <h4 className="font-medium">Paper Trading (Recommended First)</h4>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>Create a free Alpaca account at alpaca.markets</li>
+                        <li>Paper trading is for testing and should be used first</li>
+                        <li>No real money is at risk in paper mode</li>
+                        <li>API keys will be configured via n8n workflow</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-lg border p-3 text-sm space-y-2">
+                      <h4 className="font-medium">Live Trading</h4>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>Requires broker compliance and real funding</li>
+                        <li>Only switch after testing thoroughly in paper mode</li>
+                        <li>API credentials are securely handled via n8n</li>
+                        <li>Ensure your risk rules are properly configured</li>
+                      </ul>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </>
+            )}
           </div>
         </TabsContent>
 
