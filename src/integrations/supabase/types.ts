@@ -238,6 +238,50 @@ export type Database = {
           },
         ]
       }
+      broker_connections: {
+        Row: {
+          account_id: string
+          broker: string
+          created_at: string
+          environment: string
+          id: string
+          last_checked_at: string | null
+          meta: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          broker?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          last_checked_at?: string | null
+          meta?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          broker?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          last_checked_at?: string | null
+          meta?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_connections_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_metrics: {
         Row: {
           account_id: string
