@@ -1,1 +1,4 @@
 project_id = "psxjlyqicwarexrbngbt"
+
+[functions.generate-candidates]
+verify_jwt = false

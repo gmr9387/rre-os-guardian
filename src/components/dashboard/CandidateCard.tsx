@@ -10,11 +10,18 @@ import {
   Info,
   Check,
   X,
-  Loader2
+  Loader2,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { 
+  getCandidateTypeLabel, 
+  getScoreInterpretation, 
+  getRRInterpretation,
+  getConfidenceLevel 
+} from "@/lib/candidateEngine";
 
 interface Candidate {
   id: string;
@@ -192,7 +199,7 @@ export function CandidateCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <Badge variant={type}>{type.toUpperCase()}</Badge>
+              <Badge variant={type}>{getCandidateTypeLabel(type as "reclaim" | "retest" | "ladder")}</Badge>
               <span className="font-mono text-sm font-medium">{symbol}</span>
               <Badge variant={side === "BUY" ? "buy" : "sell"} className="text-[10px]">
                 {side}
@@ -234,16 +241,16 @@ export function CandidateCard({
             <Target className="h-3 w-3" />
             RR
           </p>
-          <span className={cn("metric-value text-sm", getScoreColor(rrRatio * 25))}>
-            {rrRatio.toFixed(1)}
+          <span className={cn("metric-value text-sm", getRRInterpretation(rrRatio).color)}>
+            {rrRatio.toFixed(1)}:1
           </span>
         </div>
         <div className="space-y-1">
           <p className="metric-label flex items-center gap-1">
-            <TrendingUp className="h-3 w-3" />
+            <Sparkles className="h-3 w-3" />
             Score
           </p>
-          <span className={cn("metric-value text-sm", getScoreColor(setupScore))}>
+          <span className={cn("metric-value text-sm", getScoreInterpretation(setupScore).color)}>
             {setupScore}
           </span>
         </div>
@@ -252,8 +259,8 @@ export function CandidateCard({
             <Shield className="h-3 w-3" />
             Confidence
           </p>
-          <span className={cn("metric-value text-sm", getScoreColor(personalConfidence))}>
-            {personalConfidence}%
+          <span className={cn("metric-value text-sm flex items-center gap-1", getScoreColor(personalConfidence))}>
+            {getConfidenceLevel(personalConfidence).emoji} {personalConfidence}%
           </span>
         </div>
       </div>

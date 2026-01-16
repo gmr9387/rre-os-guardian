@@ -45,7 +45,7 @@ export function useTestStopout() {
 
       const symbol = getRandomElement(SYMBOLS);
       const side = Math.random() > 0.5 ? 'buy' : 'sell';
-      const { entryPrice, stopPrice, pip } = getPlausiblePrices(symbol, side);
+      const { entryPrice, stopPrice } = getPlausiblePrices(symbol, side);
       const session = getRandomElement(SESSIONS);
 
       // Insert stopout event
@@ -69,57 +69,28 @@ export function useTestStopout() {
 
       if (stopoutError) throw stopoutError;
 
-      // Create 3 candidates: reclaim, retest, ladder
-      const candidateTypes: Array<'reclaim' | 'retest' | 'ladder'> = ['reclaim', 'retest', 'ladder'];
-      const stopDistance = Math.abs(entryPrice - stopPrice);
+      // Call edge function to generate candidates with AI-powered scoring
+      const { data: candidateData, error: candidateError } = await supabase.functions.invoke(
+        'generate-candidates',
+        {
+          body: { stopout_id: stopout.id },
+        }
+      );
 
-      const candidates = candidateTypes.map((type, idx) => {
-        // Vary entry based on type
-        const entryOffset = side === 'buy' ? pip * (5 + idx * 10) : -pip * (5 + idx * 10);
-        const candidateEntry = stopPrice + entryOffset;
-        const slOffset = side === 'buy' ? -stopDistance * 0.5 : stopDistance * 0.5;
-        const tpOffset = side === 'buy' ? stopDistance * (1.5 + idx * 0.5) : -stopDistance * (1.5 + idx * 0.5);
-        
-        const slPrice = candidateEntry + slOffset;
-        const tpPrice = candidateEntry + tpOffset;
-        const rrRatio = Math.abs(tpOffset / slOffset);
+      if (candidateError) {
+        console.error('Failed to generate candidates via edge function:', candidateError);
+        throw new Error('Failed to generate candidates');
+      }
 
-        return {
-          user_id: user.id,
-          account_id: activeAccount.id,
-          event_id: stopout.id,
-          candidate_type: type,
-          order_type: 'limit',
-          entry_price: candidateEntry,
-          sl_price: slPrice,
-          tp_price: tpPrice,
-          rr_ratio: Math.round(rrRatio * 10) / 10,
-          score: 70 + Math.random() * 25,
-          personal_confidence_score: 50 + Math.random() * 40,
-          score_tags: ['Session aligned', 'Structure valid'],
-          strategy_tag: `${session} ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-          risk_flags_json: idx === 2 ? ['High volatility'] : [],
-          decision_rules_fired_json: [
-            'Price rejected from key level',
-            'Session timing optimal',
-            'Risk/reward acceptable',
-          ],
-          trust_context_json: { session, symbol },
-          status: 'pending' as const,
-        };
-      });
-
-      const { error: candidatesError } = await supabase
-        .from('reentry_candidates')
-        .insert(candidates);
-
-      if (candidatesError) throw candidatesError;
-
-      return { stopout, candidateCount: candidates.length };
+      return { 
+        stopout, 
+        candidateCount: candidateData?.candidates?.length || 0,
+        bestScore: candidateData?.summary?.bestScore,
+      };
     },
     onSuccess: (data) => {
       toast.success('Test stop-out created', {
-        description: `Created ${data.candidateCount} candidates for testing`,
+        description: `Created ${data.candidateCount} candidates (Best score: ${data.bestScore})`,
       });
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['latest_stopout'] });
