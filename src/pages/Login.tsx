@@ -1,18 +1,25 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { bootstrapAccount } from "@/hooks/useAccountBootstrap";
+import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 
 const authSchema = z.object({
   email: z.string().email("Please enter a valid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
+
+const emailSchema = z.object({
+  email: z.string().email("Please enter a valid email"),
+});
+
+type AuthMode = "login" | "signup" | "forgot-password";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,7 +30,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<AuthMode>("login");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   // Redirect if already logged in
@@ -36,7 +43,11 @@ export default function Login() {
 
   const validateForm = () => {
     try {
-      authSchema.parse({ email, password });
+      if (mode === "forgot-password") {
+        emailSchema.parse({ email });
+      } else {
+        authSchema.parse({ email, password });
+      }
       setErrors({});
       return true;
     } catch (error) {
@@ -52,15 +63,49 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      
+      if (error) {
+        toast.error("Reset failed", {
+          description: error.message,
+        });
+        return;
+      }
+      
+      toast.success("Reset email sent!", {
+        description: "Check your inbox for the password reset link.",
+      });
+      setMode("login");
+    } catch (error) {
+      toast.error("Error", {
+        description: "Failed to send reset email. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (mode === "forgot-password") {
+      await handleForgotPassword();
+      return;
+    }
     
     if (!validateForm()) return;
     
     setIsLoading(true);
 
     try {
-      if (isSignUp) {
+      if (mode === "signup") {
         const { error } = await signUp(email, password);
         if (error) {
           if (error.message.includes('already registered')) {
@@ -115,6 +160,29 @@ export default function Login() {
     }
   }, [user, navigate]);
 
+  const getTitle = () => {
+    switch (mode) {
+      case "signup": return "Create Account";
+      case "forgot-password": return "Reset Password";
+      default: return "Welcome Back";
+    }
+  };
+
+  const getButtonText = () => {
+    if (isLoading) {
+      switch (mode) {
+        case "signup": return "Creating Account...";
+        case "forgot-password": return "Sending Reset Link...";
+        default: return "Authenticating...";
+      }
+    }
+    switch (mode) {
+      case "signup": return "Create Account";
+      case "forgot-password": return "Send Reset Link";
+      default: return "Sign In";
+    }
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
       {/* Background Effects */}
@@ -143,8 +211,14 @@ export default function Login() {
         {/* Login Card */}
         <div className="glass-card-elevated w-full max-w-md p-6 sm:p-8">
           <h2 className="mb-6 text-center text-xl font-semibold">
-            {isSignUp ? "Create Account" : "Welcome Back"}
+            {getTitle()}
           </h2>
+          
+          {mode === "forgot-password" && (
+            <p className="mb-4 text-center text-sm text-muted-foreground">
+              Enter your email and we'll send you a link to reset your password.
+            </p>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
@@ -167,32 +241,50 @@ export default function Login() {
               )}
             </div>
 
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
-                  required
-                />
+            {/* Password - Only show for login/signup */}
+            {mode !== "forgot-password" && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-xs text-danger">{errors.password}</p>
+                )}
+              </div>
+            )}
+
+            {/* Forgot Password Link - Only on login */}
+            {mode === "login" && (
+              <div className="text-right">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setMode("forgot-password");
+                    setErrors({});
+                  }}
+                  className="text-sm text-primary hover:underline"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  Forgot password?
                 </button>
               </div>
-              {errors.password && (
-                <p className="text-xs text-danger">{errors.password}</p>
-              )}
-            </div>
+            )}
 
             {/* Submit */}
             <Button
@@ -205,18 +297,23 @@ export default function Login() {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
-                  {isSignUp ? "Creating Account..." : "Authenticating..."}
+                  {getButtonText()}
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  {isSignUp ? (
+                  {mode === "signup" ? (
                     <>
                       <UserPlus className="h-4 w-4" />
-                      Create Account
+                      {getButtonText()}
+                    </>
+                  ) : mode === "forgot-password" ? (
+                    <>
+                      <Mail className="h-4 w-4" />
+                      {getButtonText()}
                     </>
                   ) : (
                     <>
-                      Sign In
+                      {getButtonText()}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -225,29 +322,45 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Toggle Sign Up / Sign In */}
+          {/* Toggle Modes */}
           <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
-                  {isSignUp ? "Already have an account?" : "New to RRE OS?"}
-                </span>
-              </div>
-            </div>
+            {mode === "forgot-password" ? (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setMode("login");
+                  setErrors({});
+                }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Sign In
+              </Button>
+            ) : (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">
+                      {mode === "signup" ? "Already have an account?" : "New to RRE OS?"}
+                    </span>
+                  </div>
+                </div>
 
-            <Button
-              variant="outline"
-              className="mt-4 w-full"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setErrors({});
-              }}
-            >
-              {isSignUp ? "Sign In Instead" : "Create an Account"}
-            </Button>
+                <Button
+                  variant="outline"
+                  className="mt-4 w-full"
+                  onClick={() => {
+                    setMode(mode === "signup" ? "login" : "signup");
+                    setErrors({});
+                  }}
+                >
+                  {mode === "signup" ? "Sign In Instead" : "Create an Account"}
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Footer */}
