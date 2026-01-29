@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus, ArrowLeft } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus, ArrowLeft, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,15 @@ const emailSchema = z.object({
   email: z.string().email("Please enter a valid email"),
 });
 
-type AuthMode = "login" | "signup" | "forgot-password";
+const passwordSchema = z.object({
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+type AuthMode = "login" | "signup" | "forgot-password" | "update-password";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -28,23 +36,65 @@ export default function Login() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState<AuthMode>("login");
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  // Redirect if already logged in
+  // Check for password recovery token on mount
   useEffect(() => {
-    if (user) {
+    const handleRecoveryToken = async () => {
+      // Check URL hash for recovery token (Supabase sends tokens in hash)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      
+      if (type === 'recovery' && accessToken) {
+        // Set the session with the recovery token
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get('refresh_token') || '',
+        });
+        
+        if (!error) {
+          setMode("update-password");
+          // Clear the hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+        } else {
+          toast.error("Invalid or expired reset link", {
+            description: "Please request a new password reset.",
+          });
+        }
+      }
+    };
+
+    handleRecoveryToken();
+
+    // Also listen for PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setMode("update-password");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Redirect if already logged in (but not in update-password mode)
+  useEffect(() => {
+    if (user && mode !== "update-password") {
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/app/dashboard';
       navigate(from, { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, navigate, location, mode]);
 
   const validateForm = () => {
     try {
       if (mode === "forgot-password") {
         emailSchema.parse({ email });
+      } else if (mode === "update-password") {
+        passwordSchema.parse({ password, confirmPassword });
       } else {
         authSchema.parse({ email, password });
       }
@@ -52,10 +102,11 @@ export default function Login() {
       return true;
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const fieldErrors: { email?: string; password?: string } = {};
+        const fieldErrors: { email?: string; password?: string; confirmPassword?: string } = {};
         error.errors.forEach((err) => {
           if (err.path[0] === 'email') fieldErrors.email = err.message;
           if (err.path[0] === 'password') fieldErrors.password = err.message;
+          if (err.path[0] === 'confirmPassword') fieldErrors.confirmPassword = err.message;
         });
         setErrors(fieldErrors);
       }
@@ -92,11 +143,48 @@ export default function Login() {
     }
   };
 
+  const handleUpdatePassword = async () => {
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      
+      if (error) {
+        toast.error("Update failed", {
+          description: error.message,
+        });
+        return;
+      }
+      
+      toast.success("Password updated!", {
+        description: "You can now sign in with your new password.",
+      });
+      
+      // Sign out and redirect to login
+      await supabase.auth.signOut();
+      setMode("login");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      toast.error("Error", {
+        description: "Failed to update password. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (mode === "forgot-password") {
       await handleForgotPassword();
+      return;
+    }
+    
+    if (mode === "update-password") {
+      await handleUpdatePassword();
       return;
     }
     
@@ -153,17 +241,18 @@ export default function Login() {
 
   // After successful auth, bootstrap account
   useEffect(() => {
-    if (user) {
+    if (user && mode !== "update-password") {
       bootstrapAccount(user.id).then(() => {
         navigate('/app/dashboard');
       });
     }
-  }, [user, navigate]);
+  }, [user, navigate, mode]);
 
   const getTitle = () => {
     switch (mode) {
       case "signup": return "Create Account";
       case "forgot-password": return "Reset Password";
+      case "update-password": return "Set New Password";
       default: return "Welcome Back";
     }
   };
@@ -173,12 +262,14 @@ export default function Login() {
       switch (mode) {
         case "signup": return "Creating Account...";
         case "forgot-password": return "Sending Reset Link...";
+        case "update-password": return "Updating Password...";
         default: return "Authenticating...";
       }
     }
     switch (mode) {
       case "signup": return "Create Account";
       case "forgot-password": return "Send Reset Link";
+      case "update-password": return "Update Password";
       default: return "Sign In";
     }
   };
@@ -219,32 +310,42 @@ export default function Login() {
               Enter your email and we'll send you a link to reset your password.
             </p>
           )}
+
+          {mode === "update-password" && (
+            <p className="mb-4 text-center text-sm text-muted-foreground">
+              Enter your new password below.
+            </p>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="trader@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                />
+            {/* Email - Only show for login/signup/forgot-password */}
+            {mode !== "update-password" && (
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="trader@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-xs text-danger">{errors.email}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="text-xs text-danger">{errors.email}</p>
-              )}
-            </div>
+            )}
 
-            {/* Password - Only show for login/signup */}
+            {/* Password - Show for login/signup/update-password */}
             {mode !== "forgot-password" && (
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">
+                  {mode === "update-password" ? "New Password" : "Password"}
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -266,6 +367,28 @@ export default function Login() {
                 </div>
                 {errors.password && (
                   <p className="text-xs text-danger">{errors.password}</p>
+                )}
+              </div>
+            )}
+
+            {/* Confirm Password - Only for update-password */}
+            {mode === "update-password" && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-xs text-danger">{errors.confirmPassword}</p>
                 )}
               </div>
             )}
@@ -311,6 +434,11 @@ export default function Login() {
                       <Mail className="h-4 w-4" />
                       {getButtonText()}
                     </>
+                  ) : mode === "update-password" ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      {getButtonText()}
+                    </>
                   ) : (
                     <>
                       {getButtonText()}
@@ -336,6 +464,10 @@ export default function Login() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Sign In
               </Button>
+            ) : mode === "update-password" ? (
+              <p className="text-center text-sm text-muted-foreground">
+                Enter a strong password to secure your account.
+              </p>
             ) : (
               <>
                 <div className="relative">
