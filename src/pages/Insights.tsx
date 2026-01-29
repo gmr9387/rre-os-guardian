@@ -6,76 +6,38 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Zap
+  Zap,
+  Loader2
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-interface InsightData {
-  alphaFingerprint: {
-    strengths: string[];
-    weaknesses: string[];
-  };
-  bestSymbols: { symbol: string; winrate: number; trades: number }[];
-  bestSessions: { session: string; winrate: number }[];
-  bestCandidateTypes: { type: string; avgR: number }[];
-  rrBandStats: { band: string; winrate: number }[];
-  avoidConditions: string[];
-  confidenceLevels: { level: string; accuracy: number }[];
-}
-
-const mockInsights: InsightData = {
-  alphaFingerprint: {
-    strengths: [
-      "Strong at London session reclaims",
-      "Excellent risk management on gold",
-      "Quick decision-making under pressure",
-      "High accuracy on 1.5-2.0 RR setups",
-    ],
-    weaknesses: [
-      "Tendency to overtrade after losses",
-      "Lower accuracy during news events",
-      "Weak at ladder entries",
-      "Reduced performance in Asian session",
-    ],
-  },
-  bestSymbols: [
-    { symbol: "EURUSD", winrate: 68, trades: 45 },
-    { symbol: "XAUUSD", winrate: 62, trades: 32 },
-    { symbol: "NAS100", winrate: 58, trades: 28 },
-    { symbol: "GBPUSD", winrate: 55, trades: 25 },
-  ],
-  bestSessions: [
-    { session: "London", winrate: 72 },
-    { session: "NY Open", winrate: 65 },
-    { session: "London/NY Overlap", winrate: 60 },
-    { session: "Asian", winrate: 48 },
-  ],
-  bestCandidateTypes: [
-    { type: "Reclaim", avgR: 1.6 },
-    { type: "Retest", avgR: 1.2 },
-    { type: "Ladder", avgR: 0.8 },
-  ],
-  rrBandStats: [
-    { band: "1.0-1.5", winrate: 72 },
-    { band: "1.5-2.0", winrate: 68 },
-    { band: "2.0-2.5", winrate: 55 },
-    { band: "2.5+", winrate: 45 },
-  ],
-  avoidConditions: [
-    "High EVI (>60)",
-    "Pre-news (15 min)",
-    "Loss streak ≥3",
-    "Low liquidity (late Friday)",
-  ],
-  confidenceLevels: [
-    { level: "High (80%+)", accuracy: 78 },
-    { level: "Medium (60-79%)", accuracy: 62 },
-    { level: "Low (<60%)", accuracy: 45 },
-  ],
-};
+import { useAccountInsights } from "@/hooks/useAccountInsights";
 
 export default function Insights() {
+  const { insights, isLoading, error } = useAccountInsights();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !insights) {
+    return (
+      <div className="glass-card p-8 text-center">
+        <Fingerprint className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="font-medium mb-2">Unable to Load Insights</h3>
+        <p className="text-sm text-muted-foreground">
+          {error?.message || "Please try again later."}
+        </p>
+      </div>
+    );
+  }
+
+  const hasTradeData = insights.best_symbols.length > 0;
+
   return (
     <div className="space-y-4 pb-20 lg:pb-6">
       {/* Header */}
@@ -98,7 +60,7 @@ export default function Insights() {
             Strengths
           </h3>
           <ul className="space-y-2">
-            {mockInsights.alphaFingerprint.strengths.map((strength, idx) => (
+            {insights.alpha_fingerprint.strengths.map((strength, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 {strength}
@@ -114,7 +76,7 @@ export default function Insights() {
             Areas for Improvement
           </h3>
           <ul className="space-y-2">
-            {mockInsights.alphaFingerprint.weaknesses.map((weakness, idx) => (
+            {insights.alpha_fingerprint.weaknesses.map((weakness, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm">
                 <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 {weakness}
@@ -130,23 +92,29 @@ export default function Insights() {
           <TrendingUp className="h-5 w-5 text-primary" />
           Best Performing Symbols
         </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {mockInsights.bestSymbols.map((item) => (
-            <div key={item.symbol} className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center">
-              <span className="font-mono font-bold">{item.symbol}</span>
-              <div className="mt-1 flex items-center justify-center gap-2">
-                <span className={cn(
-                  "text-sm font-medium",
-                  item.winrate >= 65 ? "text-success" : 
-                  item.winrate >= 50 ? "text-primary" : "text-warning"
-                )}>
-                  {item.winrate}%
-                </span>
-                <span className="text-xs text-muted-foreground">({item.trades})</span>
+        {hasTradeData ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {insights.best_symbols.map((item) => (
+              <div key={item.symbol} className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center">
+                <span className="font-mono font-bold">{item.symbol}</span>
+                <div className="mt-1 flex items-center justify-center gap-2">
+                  <span className={cn(
+                    "text-sm font-medium",
+                    item.winrate >= 65 ? "text-success" : 
+                    item.winrate >= 50 ? "text-primary" : "text-warning"
+                  )}>
+                    {item.winrate}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">({item.trades})</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Complete more trades to see symbol performance data.
+          </p>
+        )}
       </div>
 
       {/* Best Sessions */}
@@ -155,32 +123,38 @@ export default function Insights() {
           <Clock className="h-5 w-5 text-primary" />
           Session Performance
         </h3>
-        <div className="space-y-3">
-          {mockInsights.bestSessions.map((session) => (
-            <div key={session.session} className="flex items-center gap-4">
-              <span className="w-32 text-sm">{session.session}</span>
-              <div className="flex-1">
-                <div className="h-3 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      session.winrate >= 65 ? "bg-success" :
-                      session.winrate >= 50 ? "bg-primary" : "bg-warning"
-                    )}
-                    style={{ width: `${session.winrate}%` }}
-                  />
+        {insights.best_sessions.length > 0 ? (
+          <div className="space-y-3">
+            {insights.best_sessions.map((session) => (
+              <div key={session.session} className="flex items-center gap-4">
+                <span className="w-32 text-sm">{session.session}</span>
+                <div className="flex-1">
+                  <div className="h-3 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        session.winrate >= 65 ? "bg-success" :
+                        session.winrate >= 50 ? "bg-primary" : "bg-warning"
+                      )}
+                      style={{ width: `${session.winrate}%` }}
+                    />
+                  </div>
                 </div>
+                <span className={cn(
+                  "w-12 text-right font-mono text-sm font-medium",
+                  session.winrate >= 65 ? "text-success" :
+                  session.winrate >= 50 ? "text-primary" : "text-warning"
+                )}>
+                  {session.winrate}%
+                </span>
               </div>
-              <span className={cn(
-                "w-12 text-right font-mono text-sm font-medium",
-                session.winrate >= 65 ? "text-success" :
-                session.winrate >= 50 ? "text-primary" : "text-warning"
-              )}>
-                {session.winrate}%
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Complete more trades to see session performance data.
+          </p>
+        )}
       </div>
 
       {/* RR Band Stats & Candidate Types */}
@@ -191,45 +165,57 @@ export default function Insights() {
             <Target className="h-5 w-5 text-primary" />
             Candidate Type Performance
           </h3>
-          <div className="space-y-3">
-            {mockInsights.bestCandidateTypes.map((item) => (
-              <div key={item.type} className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 p-3">
-                <Badge variant={item.type.toLowerCase() as any}>{item.type}</Badge>
-                <span className={cn(
-                  "font-mono font-medium",
-                  item.avgR >= 1.5 ? "text-success" : 
-                  item.avgR >= 1.0 ? "text-primary" : "text-warning"
-                )}>
-                  {item.avgR.toFixed(1)}R avg
-                </span>
-              </div>
-            ))}
-          </div>
+          {insights.best_candidate_types.length > 0 ? (
+            <div className="space-y-3">
+              {insights.best_candidate_types.map((item) => (
+                <div key={item.type} className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 p-3">
+                  <Badge variant={item.type.toLowerCase() as "reclaim" | "retest" | "ladder"}>{item.type}</Badge>
+                  <span className={cn(
+                    "font-mono font-medium",
+                    item.avgR >= 1.5 ? "text-success" : 
+                    item.avgR >= 1.0 ? "text-primary" : "text-warning"
+                  )}>
+                    {item.avgR.toFixed(1)}R avg
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Complete more trades to see candidate type performance.
+            </p>
+          )}
         </div>
 
         {/* RR Band Stats */}
         <div className="glass-card p-4">
           <h3 className="mb-3 font-medium">RR Band Performance</h3>
-          <div className="space-y-3">
-            {mockInsights.rrBandStats.map((band) => (
-              <div key={band.band} className="flex items-center gap-4">
-                <span className="w-20 font-mono text-sm">{band.band}</span>
-                <div className="flex-1">
-                  <div className="h-3 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={cn(
-                        "h-full rounded-full",
-                        band.winrate >= 65 ? "bg-success" :
-                        band.winrate >= 50 ? "bg-primary" : "bg-warning"
-                      )}
-                      style={{ width: `${band.winrate}%` }}
-                    />
+          {insights.rr_band_stats.length > 0 ? (
+            <div className="space-y-3">
+              {insights.rr_band_stats.map((band) => (
+                <div key={band.band} className="flex items-center gap-4">
+                  <span className="w-20 font-mono text-sm">{band.band}</span>
+                  <div className="flex-1">
+                    <div className="h-3 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          band.winrate >= 65 ? "bg-success" :
+                          band.winrate >= 50 ? "bg-primary" : "bg-warning"
+                        )}
+                        style={{ width: `${band.winrate}%` }}
+                      />
+                    </div>
                   </div>
+                  <span className="w-12 text-right font-mono text-sm">{band.winrate}%</span>
                 </div>
-                <span className="w-12 text-right font-mono text-sm">{band.winrate}%</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Complete more trades to see RR band performance.
+            </p>
+          )}
         </div>
       </div>
 
@@ -240,7 +226,7 @@ export default function Insights() {
           Conditions to Avoid
         </h3>
         <div className="flex flex-wrap gap-2">
-          {mockInsights.avoidConditions.map((condition, idx) => (
+          {insights.avoid_conditions.map((condition, idx) => (
             <Badge key={idx} variant="locked" className="text-sm">
               {condition}
             </Badge>
@@ -248,27 +234,19 @@ export default function Insights() {
         </div>
       </div>
 
-      {/* Confidence Accuracy */}
-      <div className="glass-card p-4">
-        <h3 className="mb-3 font-medium">Confidence Level Accuracy</h3>
-        <p className="mb-4 text-sm text-muted-foreground">
-          How accurate your confidence predictions have been historically
-        </p>
-        <div className="grid grid-cols-3 gap-3">
-          {mockInsights.confidenceLevels.map((level) => (
-            <div key={level.level} className="rounded-lg border border-border/50 bg-muted/30 p-3 text-center">
-              <p className="text-xs text-muted-foreground">{level.level}</p>
-              <span className={cn(
-                "metric-value text-lg",
-                level.accuracy >= 70 ? "text-success" :
-                level.accuracy >= 55 ? "text-primary" : "text-warning"
-              )}>
-                {level.accuracy}%
-              </span>
-            </div>
-          ))}
+      {/* Getting Started Callout */}
+      {!hasTradeData && (
+        <div className="glass-card border-primary/30 bg-primary/5 p-4">
+          <h3 className="mb-2 flex items-center gap-2 font-medium text-primary">
+            <Zap className="h-5 w-5" />
+            Getting Started
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Your Alpha Fingerprint will become more accurate as you complete trades. 
+            The system learns from your performance patterns to provide personalized insights.
+          </p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
