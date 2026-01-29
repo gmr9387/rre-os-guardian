@@ -1,83 +1,11 @@
-import { useState } from "react";
-import { BookOpen, TrendingUp, Target, BarChart3, ToggleLeft, ToggleRight } from "lucide-react";
+import { BookOpen, TrendingUp, Target, BarChart3, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-
-interface Strategy {
-  id: string;
-  tag: string;
-  description: string;
-  winrate: number;
-  avgR: number;
-  medianR: number;
-  tradeCount: number;
-  enabled: boolean;
-}
-
-const mockStrategies: Strategy[] = [
-  {
-    id: "s-1",
-    tag: "London Reclaim",
-    description: "Re-entry on session high/low reclaim after initial stop-out",
-    winrate: 68,
-    avgR: 1.4,
-    medianR: 1.2,
-    tradeCount: 45,
-    enabled: true,
-  },
-  {
-    id: "s-2",
-    tag: "Structure Retest",
-    description: "Retest of broken structure level for continuation",
-    winrate: 62,
-    avgR: 1.1,
-    medianR: 0.9,
-    tradeCount: 38,
-    enabled: true,
-  },
-  {
-    id: "s-3",
-    tag: "Ladder Scale",
-    description: "Progressive scaling into position with averaged entry",
-    winrate: 55,
-    avgR: 1.8,
-    medianR: 1.5,
-    tradeCount: 22,
-    enabled: false,
-  },
-  {
-    id: "s-4",
-    tag: "News Fade",
-    description: "Fading overextended moves after news-driven spikes",
-    winrate: 48,
-    avgR: 2.2,
-    medianR: 1.8,
-    tradeCount: 15,
-    enabled: false,
-  },
-  {
-    id: "s-5",
-    tag: "Session Overlap",
-    description: "Trading continuation during session transition periods",
-    winrate: 71,
-    avgR: 1.0,
-    medianR: 0.8,
-    tradeCount: 28,
-    enabled: true,
-  },
-];
+import { usePlaybookStrategies } from "@/hooks/usePlaybookStrategies";
 
 export default function Playbook() {
-  const [strategies, setStrategies] = useState(mockStrategies);
-
-  const toggleStrategy = (id: string) => {
-    setStrategies(prev =>
-      prev.map(s =>
-        s.id === id ? { ...s, enabled: !s.enabled } : s
-      )
-    );
-  };
+  const { strategies, isLoading, toggleStrategy, isToggling } = usePlaybookStrategies();
 
   const getWinrateColor = (winrate: number) => {
     if (winrate >= 65) return "text-success";
@@ -86,6 +14,14 @@ export default function Playbook() {
   };
 
   const enabledCount = strategies.filter(s => s.enabled).length;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-20 lg:pb-6">
@@ -115,7 +51,9 @@ export default function Playbook() {
         <div className="glass-card p-4 text-center">
           <p className="metric-label">Avg Winrate</p>
           <span className="metric-value text-2xl">
-            {Math.round(strategies.reduce((a, b) => a + b.winrate, 0) / strategies.length)}%
+            {strategies.length > 0 
+              ? Math.round(strategies.reduce((a, b) => a + b.winrate, 0) / strategies.length) || 0
+              : 0}%
           </span>
         </div>
         <div className="glass-card p-4 text-center">
@@ -155,7 +93,8 @@ export default function Playbook() {
               </div>
               <Switch
                 checked={strategy.enabled}
-                onCheckedChange={() => toggleStrategy(strategy.id)}
+                onCheckedChange={(checked) => toggleStrategy(strategy.tag, checked)}
+                disabled={isToggling}
               />
             </div>
 
@@ -167,7 +106,7 @@ export default function Playbook() {
                   Winrate
                 </p>
                 <span className={cn("metric-value text-lg", getWinrateColor(strategy.winrate))}>
-                  {strategy.winrate}%
+                  {strategy.winrate > 0 ? `${strategy.winrate}%` : '—'}
                 </span>
               </div>
               <div className="space-y-1">
@@ -176,13 +115,13 @@ export default function Playbook() {
                   Avg R
                 </p>
                 <span className="metric-value text-lg">
-                  {strategy.avgR.toFixed(1)}R
+                  {strategy.avgR > 0 ? `${strategy.avgR.toFixed(1)}R` : '—'}
                 </span>
               </div>
               <div className="space-y-1">
                 <p className="metric-label">Median R</p>
                 <span className="metric-value text-lg">
-                  {strategy.medianR.toFixed(1)}R
+                  {strategy.medianR > 0 ? `${strategy.medianR.toFixed(1)}R` : '—'}
                 </span>
               </div>
               <div className="space-y-1">
@@ -190,7 +129,7 @@ export default function Playbook() {
                   <BarChart3 className="h-3 w-3" />
                   Trades
                 </p>
-                <span className="metric-value text-lg">{strategy.tradeCount}</span>
+                <span className="metric-value text-lg">{strategy.tradeCount || '—'}</span>
               </div>
             </div>
 
@@ -203,7 +142,7 @@ export default function Playbook() {
                     className={cn(
                       "h-full rounded-full transition-all",
                       strategy.winrate >= 65 ? "bg-success" : 
-                      strategy.winrate >= 50 ? "bg-warning" : "bg-danger"
+                      strategy.winrate >= 50 ? "bg-warning" : "bg-muted-foreground/30"
                     )}
                     style={{ width: `${strategy.winrate}%` }}
                   />
@@ -219,6 +158,16 @@ export default function Playbook() {
           </div>
         ))}
       </div>
+
+      {strategies.length === 0 && (
+        <div className="glass-card p-8 text-center">
+          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="font-medium mb-2">No Strategies Yet</h3>
+          <p className="text-sm text-muted-foreground">
+            Strategies will appear here as you configure your playbook.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

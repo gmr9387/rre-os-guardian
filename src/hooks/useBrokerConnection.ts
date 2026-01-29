@@ -82,35 +82,43 @@ export function useBrokerConnection() {
     mutationFn: async () => {
       if (!activeAccount || !brokerConnection) throw new Error("No account");
 
-      const environment = brokerConnection.environment;
-      const hasBrokerAccountId = !!(brokerConnection.meta as Record<string, unknown>)?.broker_account_id;
+      // Call the verify-broker edge function
+      const { data, error } = await supabase.functions.invoke('verify-broker', {
+        body: { account_id: activeAccount.id },
+      });
 
-      // For MVP: simulate connection check
-      // Paper mode always "succeeds", live mode needs broker_account_id
-      let newStatus: BrokerStatus;
-      if (environment === "paper") {
-        newStatus = "connected";
-      } else {
-        newStatus = hasBrokerAccountId ? "connected" : "disconnected";
+      if (error) {
+        // Fallback to local simulation if edge function fails
+        console.warn('Edge function failed, using local simulation:', error);
+        
+        const environment = brokerConnection.environment;
+        const hasBrokerAccountId = !!(brokerConnection.meta as Record<string, unknown>)?.broker_account_id;
+
+        let newStatus: BrokerStatus;
+        if (environment === "paper") {
+          newStatus = "connected";
+        } else {
+          newStatus = hasBrokerAccountId ? "connected" : "disconnected";
+        }
+
+        await supabase
+          .from("broker_connections")
+          .update({
+            status: newStatus,
+            last_checked_at: new Date().toISOString(),
+            meta: {
+              ...(brokerConnection.meta as Record<string, unknown>),
+              simulated: true,
+              note: "Local fallback - edge function unavailable",
+              last_check_result: newStatus === "connected" ? "success" : "no_credentials",
+            },
+          })
+          .eq("account_id", activeAccount.id);
+
+        return newStatus;
       }
 
-      const { error } = await supabase
-        .from("broker_connections")
-        .update({
-          status: newStatus,
-          last_checked_at: new Date().toISOString(),
-          meta: {
-            ...(brokerConnection.meta as Record<string, unknown>),
-            simulated: true,
-            note: "Keys will be handled via n8n",
-            last_check_result: newStatus === "connected" ? "success" : "no_credentials",
-          },
-        })
-        .eq("account_id", activeAccount.id);
-
-      if (error) throw error;
-
-      return newStatus;
+      return data.status as BrokerStatus;
     },
     onSuccess: (status) => {
       if (status === "connected") {

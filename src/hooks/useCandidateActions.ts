@@ -49,41 +49,57 @@ export function useCandidateActions() {
 
       if (!activeAccount) throw new Error('No account');
 
-      // Update candidate status (DB-safe "executed"; UI renders as "Confirmed")
-      const { error: candidateError } = await supabase
-        .from('reentry_candidates')
-        .update({ status: 'executed' })
-        .eq('id', candidateId);
-
-      if (candidateError) throw candidateError;
-
-      // Insert execution record (stub)
-      const { error: execError } = await supabase
-        .from('executions')
-        .insert({
+      // Call the execute-order edge function
+      const { data, error } = await supabase.functions.invoke('execute-order', {
+        body: { 
           candidate_id: candidateId,
           account_id: activeAccount.id,
-          idempotency_key: `${activeAccount.id}_${candidateId}`,
-          broker: 'mt5_metaapi',
-          status: 'pending',
-          request_json: {
-            action: 'execute_reentry',
+        },
+      });
+
+      if (error) {
+        // Fallback to local simulation if edge function fails
+        console.warn('Edge function failed, using local simulation:', error);
+        
+        // Update candidate status locally
+        const { error: candidateError } = await supabase
+          .from('reentry_candidates')
+          .update({ status: 'executed' })
+          .eq('id', candidateId);
+
+        if (candidateError) throw candidateError;
+
+        // Insert execution record (stub)
+        const { error: execError } = await supabase
+          .from('executions')
+          .insert({
             candidate_id: candidateId,
-            timestamp: new Date().toISOString(),
-          },
-        });
+            account_id: activeAccount.id,
+            idempotency_key: `${activeAccount.id}_${candidateId}_${Date.now()}`,
+            broker: 'simulation',
+            status: 'pending',
+            request_json: {
+              action: 'execute_reentry',
+              candidate_id: candidateId,
+              timestamp: new Date().toISOString(),
+              fallback: true,
+            },
+          });
 
-      if (execError) throw execError;
+        if (execError) throw execError;
 
-      // Increment reentries_used for today
-      const today = new Date().toISOString().split('T')[0];
-      await supabase
-        .from('daily_metrics')
-        .update({ reentries_used: (dailyMetrics?.reentries_used || 0) + 1 })
-        .eq('account_id', activeAccount.id)
-        .eq('date', today);
+        // Increment reentries_used for today
+        const today = new Date().toISOString().split('T')[0];
+        await supabase
+          .from('daily_metrics')
+          .update({ reentries_used: (dailyMetrics?.reentries_used || 0) + 1 })
+          .eq('account_id', activeAccount.id)
+          .eq('date', today);
 
-      return { candidateId };
+        return { candidateId, simulated: true };
+      }
+
+      return { candidateId, ...data };
     },
     onSuccess: () => {
       toast.success('Execution queued (stub)', {
