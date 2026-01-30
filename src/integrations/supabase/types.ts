@@ -73,6 +73,7 @@ export type Database = {
           max_reentries_day: number
           mode: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps: Json | null
+          risk_per_trade_pct: number
           two_step_confirm_enabled: boolean
           updated_at: string
         }
@@ -87,6 +88,7 @@ export type Database = {
           max_reentries_day?: number
           mode?: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps?: Json | null
+          risk_per_trade_pct?: number
           two_step_confirm_enabled?: boolean
           updated_at?: string
         }
@@ -101,6 +103,7 @@ export type Database = {
           max_reentries_day?: number
           mode?: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps?: Json | null
+          risk_per_trade_pct?: number
           two_step_confirm_enabled?: boolean
           updated_at?: string
         }

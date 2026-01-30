@@ -119,6 +119,15 @@ serve(async (req) => {
       .eq('account_id', account_id)
       .single();
 
+    // Fetch account settings for position sizing
+    const { data: accountSettings } = await supabase
+      .from('account_settings')
+      .select('risk_per_trade_pct')
+      .eq('account_id', account_id)
+      .single();
+
+    const riskPerTradePct = accountSettings?.risk_per_trade_pct || 1.0;
+
     // Check for Alpaca API credentials
     const alpacaApiKey = Deno.env.get('ALPACA_API_KEY');
     const alpacaSecretKey = Deno.env.get('ALPACA_SECRET_KEY');
@@ -132,6 +141,42 @@ serve(async (req) => {
     console.log(`[execute-order] Alpaca credentials: ${hasAlpacaCredentials ? 'YES' : 'NO'}`);
     console.log(`[execute-order] Paper mode: ${isPaperMode}`);
     console.log(`[execute-order] Using Alpaca: ${useAlpaca}`);
+    console.log(`[execute-order] Risk per trade: ${riskPerTradePct}%`);
+
+    // Calculate dynamic position size
+    let calculatedQty = 1;
+    
+    if (useAlpaca && hasAlpacaCredentials) {
+      try {
+        // Fetch account balance from Alpaca
+        const baseUrl = isPaperMode ? 'https://paper-api.alpaca.markets' : 'https://api.alpaca.markets';
+        const accountResponse = await fetch(`${baseUrl}/v2/account`, {
+          headers: {
+            'APCA-API-KEY-ID': alpacaApiKey!,
+            'APCA-API-SECRET-KEY': alpacaSecretKey!,
+          },
+        });
+        
+        if (accountResponse.ok) {
+          const alpacaAccount = await accountResponse.json();
+          const equity = parseFloat(alpacaAccount.equity);
+          const riskAmount = equity * (riskPerTradePct / 100);
+          const stopDistance = Math.abs(candidate.entry_price - candidate.sl_price);
+          
+          if (stopDistance > 0) {
+            // For stocks: qty = risk$ / (stopDistance * sharePrice)
+            // Simplified: assume entry price ≈ share price
+            calculatedQty = Math.floor(riskAmount / stopDistance);
+            calculatedQty = Math.max(1, calculatedQty); // At least 1 share
+            console.log(`[execute-order] Dynamic sizing: equity=$${equity.toFixed(2)}, risk=$${riskAmount.toFixed(2)}, qty=${calculatedQty}`);
+          }
+        } else {
+          console.warn(`[execute-order] Could not fetch Alpaca account, using default qty=1`);
+        }
+      } catch (e) {
+        console.warn(`[execute-order] Position sizing error:`, e);
+      }
+    }
 
     // Generate idempotency key
     const idempotencyKey = `${account_id}_${candidate_id}_${Date.now()}`;
@@ -152,10 +197,11 @@ serve(async (req) => {
       side: direction === 'long' ? 'buy' : 'sell',
       type: 'limit',
       limit_price: candidate.entry_price,
-      qty: 1, // Would be calculated based on risk in real implementation
+      qty: calculatedQty,
       time_in_force: 'gtc',
       stop_loss: candidate.sl_price,
       take_profit: candidate.tp_price,
+      risk_per_trade_pct: riskPerTradePct,
     };
 
     if (useAlpaca) {
@@ -168,7 +214,7 @@ serve(async (req) => {
           alpacaSecretKey!,
           {
             symbol: symbol,
-            qty: 1,
+            qty: calculatedQty,
             side: direction === 'long' ? 'buy' : 'sell',
             type: 'limit',
             time_in_force: 'gtc',
@@ -189,8 +235,8 @@ serve(async (req) => {
           order_id: alpacaOrder.id,
           filled_at: alpacaOrder.submitted_at,
           filled_price: candidate.entry_price,
-          filled_qty: 1,
-          message: `Bracket order submitted to Alpaca (${alpacaOrder.status})`,
+          filled_qty: calculatedQty,
+          message: `Bracket order submitted to Alpaca (${alpacaOrder.status}) - ${calculatedQty} shares`,
           alpaca_response: alpacaOrder,
         };
 
@@ -207,8 +253,8 @@ serve(async (req) => {
           order_id: simulatedOrderId,
           filled_at: new Date().toISOString(),
           filled_price: candidate.entry_price,
-          filled_qty: 1,
-          message: `Alpaca unavailable for ${symbol}, simulated execution`,
+          filled_qty: calculatedQty,
+          message: `Alpaca unavailable for ${symbol}, simulated execution (${calculatedQty} units)`,
         };
       }
     } else {
@@ -222,10 +268,10 @@ serve(async (req) => {
         order_id: simulatedOrderId,
         filled_at: new Date().toISOString(),
         filled_price: candidate.entry_price,
-        filled_qty: 1,
+        filled_qty: calculatedQty,
         message: hasAlpacaCredentials 
-          ? 'Order simulated (live mode not enabled)' 
-          : 'Order simulated (no Alpaca credentials configured)',
+          ? `Order simulated (${calculatedQty} units, live mode not enabled)` 
+          : `Order simulated (${calculatedQty} units, no Alpaca credentials)`,
       };
     }
 
