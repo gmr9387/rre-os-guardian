@@ -66,6 +66,7 @@ export type Database = {
           account_id: string
           cooldown_seconds: number
           created_at: string
+          execution_mode: string
           id: string
           lock_duration_minutes: number
           loss_streak_lock_threshold: number
@@ -81,6 +82,7 @@ export type Database = {
           account_id: string
           cooldown_seconds?: number
           created_at?: string
+          execution_mode?: string
           id?: string
           lock_duration_minutes?: number
           loss_streak_lock_threshold?: number
@@ -96,6 +98,7 @@ export type Database = {
           account_id?: string
           cooldown_seconds?: number
           created_at?: string
+          execution_mode?: string
           id?: string
           lock_duration_minutes?: number
           loss_streak_lock_threshold?: number
