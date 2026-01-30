@@ -4,10 +4,13 @@ import { HealthBanner } from "@/components/dashboard/HealthBanner";
 import { RiskSnapshot } from "@/components/dashboard/RiskSnapshot";
 import { StopOutCard } from "@/components/dashboard/StopOutCard";
 import { CandidateCard } from "@/components/dashboard/CandidateCard";
+import { ManualSignalCard } from "@/components/dashboard/ManualSignalCard";
 import { TestStopoutButton } from "@/components/dashboard/TestStopoutButton";
 import { AdjustCandidateModal } from "@/components/dashboard/AdjustCandidateModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
+import { useExecutionMode } from "@/hooks/useExecutionMode";
 import { 
   useDailyMetrics, 
   useBehaviorMetrics, 
@@ -17,7 +20,7 @@ import {
 } from "@/hooks/useDashboardData";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Hand, Zap } from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -28,6 +31,7 @@ export default function Dashboard() {
   const { data: recentStopouts, isLoading: recentLoading } = useRecentStopouts(3);
   const { data: candidates, isLoading: candidatesLoading } = usePendingCandidates();
   const { execute, ignore, adjust } = useCandidateActions();
+  const { executionMode } = useExecutionMode();
   
   // Enable real-time updates
   useRealtimeSubscription();
@@ -179,13 +183,32 @@ export default function Dashboard() {
 
       {/* Candidate Stack */}
       <div className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <span className="text-primary">#</span>
-          Re-Entry Candidates
-          <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
-            {candidates?.length || 0}
-          </span>
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <span className="text-primary">#</span>
+            Re-Entry Candidates
+            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+              {candidates?.length || 0}
+            </span>
+          </h2>
+          {/* Execution Mode Indicator */}
+          <Badge 
+            variant="outline" 
+            className={executionMode === "manual" ? "gap-1 bg-success/10 text-success border-success/30" : "gap-1 bg-primary/10 text-primary border-primary/30"}
+          >
+            {executionMode === "manual" ? (
+              <>
+                <Hand className="h-3 w-3" />
+                Manual
+              </>
+            ) : (
+              <>
+                <Zap className="h-3 w-3" />
+                Auto
+              </>
+            )}
+          </Badge>
+        </div>
         
         {candidatesLoading ? (
           <div className="space-y-3">
@@ -194,33 +217,46 @@ export default function Dashboard() {
           </div>
         ) : candidates && candidates.length > 0 ? (
           <div className="space-y-3">
-            {candidates.map((candidate, index) => (
-              <CandidateCard
-                key={candidate.id}
-                candidate={{
-                  id: candidate.id,
-                  type: candidate.candidate_type,
-                  entryPrice: Number(candidate.entry_price),
-                  slPrice: Number(candidate.sl_price),
-                  tpPrice: Number(candidate.tp_price) || 0,
-                  rrRatio: Number(candidate.rr_ratio) || 0,
-                  setupScore: Number(candidate.score) || 0,
-                  personalConfidence: Number(candidate.personal_confidence_score) || 0,
-                  trustContext: (candidate.trust_context_json as { session?: string })?.session || 'Standard setup',
-                  riskFlags: (candidate.risk_flags_json as string[]) || [],
-                  strategyTag: candidate.strategy_tag || 'Manual',
-                  symbol: candidate.stopout_event?.symbol || 'UNKNOWN',
-                  side: (candidate.stopout_event?.side?.toUpperCase() || 'BUY') as "BUY" | "SELL",
-                  rules: ['Price rejected from key level', 'Session timing optimal', 'Risk/reward acceptable'],
-                  status: candidate.status,
-                }}
-                rank={index + 1}
-                onExecute={handleExecute}
-                onAdjust={handleAdjust}
-                onIgnore={handleIgnore}
-                onClick={handleCandidateClick}
-              />
-            ))}
+            {candidates.map((candidate, index) => {
+              const candidateData = {
+                id: candidate.id,
+                type: candidate.candidate_type,
+                entryPrice: Number(candidate.entry_price),
+                slPrice: Number(candidate.sl_price),
+                tpPrice: Number(candidate.tp_price) || 0,
+                rrRatio: Number(candidate.rr_ratio) || 0,
+                setupScore: Number(candidate.score) || 0,
+                personalConfidence: Number(candidate.personal_confidence_score) || 0,
+                trustContext: (candidate.trust_context_json as { session?: string })?.session || 'Standard setup',
+                riskFlags: (candidate.risk_flags_json as string[]) || [],
+                strategyTag: candidate.strategy_tag || 'Manual',
+                symbol: candidate.stopout_event?.symbol || 'UNKNOWN',
+                side: (candidate.stopout_event?.side?.toUpperCase() || 'BUY') as "BUY" | "SELL",
+                rules: ['Price rejected from key level', 'Session timing optimal', 'Risk/reward acceptable'],
+                status: candidate.status,
+              };
+
+              return executionMode === "manual" ? (
+                <ManualSignalCard
+                  key={candidate.id}
+                  candidate={candidateData}
+                  rank={index + 1}
+                  onMarkExecuted={handleExecute}
+                  onIgnore={handleIgnore}
+                  onClick={handleCandidateClick}
+                />
+              ) : (
+                <CandidateCard
+                  key={candidate.id}
+                  candidate={candidateData}
+                  rank={index + 1}
+                  onExecute={handleExecute}
+                  onAdjust={handleAdjust}
+                  onIgnore={handleIgnore}
+                  onClick={handleCandidateClick}
+                />
+              );
+            })}
           </div>
         ) : (
           <div className="glass-card p-6 text-center">

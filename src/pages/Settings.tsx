@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
 import { useBrokerConnection } from "@/hooks/useBrokerConnection";
+import { useExecutionMode } from "@/hooks/useExecutionMode";
 import {
   Settings as SettingsIcon,
   Shield,
@@ -18,6 +19,8 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Zap,
+  Hand,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +93,9 @@ export default function Settings() {
     isUpdating: brokerUpdating,
     isChecking: brokerChecking,
   } = useBrokerConnection();
+
+  // Execution mode
+  const { executionMode, setExecutionMode, isUpdating: executionModeUpdating } = useExecutionMode();
 
   // Broker help
   const [helpOpen, setHelpOpen] = useState(false);
@@ -610,6 +616,81 @@ export default function Settings() {
 
         {/* Broker Tab */}
         <TabsContent value="broker" className="space-y-4">
+          {/* Execution Mode Toggle */}
+          <div className="glass-card p-4 space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
+                <Zap className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-medium">Execution Mode</h3>
+                <p className="text-xs text-muted-foreground">Choose how trades are executed</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                onClick={() => setExecutionMode("auto")}
+                disabled={executionModeUpdating}
+                className={cn(
+                  "rounded-lg border-2 p-4 text-left transition-all",
+                  executionMode === "auto"
+                    ? "border-primary bg-primary/10"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                  <span className="font-semibold">Auto (Alpaca)</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Orders execute automatically via Alpaca API. Requires API credentials and funds in your Alpaca account.
+                </p>
+                {executionMode === "auto" && (
+                  <Badge variant="default" className="mt-2">Active</Badge>
+                )}
+              </button>
+
+              <button
+                onClick={() => setExecutionMode("manual")}
+                disabled={executionModeUpdating}
+                className={cn(
+                  "rounded-lg border-2 p-4 text-left transition-all",
+                  executionMode === "manual"
+                    ? "border-success bg-success/10"
+                    : "border-border hover:border-success/50"
+                )}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Hand className="h-5 w-5 text-success" />
+                  <span className="font-semibold">Manual Signals</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Receive trade signals (Entry, SL, TP) to copy. Execute manually in any broker of your choice.
+                </p>
+                {executionMode === "manual" && (
+                  <Badge variant="default" className="mt-2 bg-success text-success-foreground">Active</Badge>
+                )}
+              </button>
+            </div>
+
+            {executionMode === "manual" && (
+              <div className="flex items-center gap-2 rounded-lg bg-success/10 p-3 text-sm text-success">
+                <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                <span>Your funds stay in your preferred broker. Copy signals and execute trades yourself.</span>
+              </div>
+            )}
+
+            {executionMode === "auto" && (
+              <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                <Zap className="h-4 w-4 flex-shrink-0" />
+                <span>Orders will be sent directly to Alpaca when you confirm a re-entry.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Broker Connection - only show in auto mode */}
+          {executionMode === "auto" && (
           <div className="glass-card p-4 space-y-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/20">
@@ -750,6 +831,7 @@ export default function Settings() {
               </>
             )}
           </div>
+          )}
         </TabsContent>
 
         {/* Security Tab */}
