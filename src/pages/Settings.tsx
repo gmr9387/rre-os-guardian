@@ -68,6 +68,7 @@ export default function Settings() {
   const [maxDailyLoss, setMaxDailyLoss] = useState(2);
   const [lossStreakLock, setLossStreakLock] = useState(3);
   const [lockDuration, setLockDuration] = useState(60);
+  const [riskPerTradePct, setRiskPerTradePct] = useState(1.0);
   const [twoStepConfirm, setTwoStepConfirm] = useState(false);
   const [perSymbolCaps, setPerSymbolCaps] = useState("{}");
 
@@ -183,6 +184,7 @@ export default function Settings() {
       setMaxDailyLoss(Number(accountSettings.max_daily_loss_pct));
       setLossStreakLock(accountSettings.loss_streak_lock_threshold);
       setLockDuration(accountSettings.lock_duration_minutes);
+      setRiskPerTradePct(Number(accountSettings.risk_per_trade_pct) || 1.0);
       setTwoStepConfirm(accountSettings.two_step_confirm_enabled);
       setPerSymbolCaps(JSON.stringify(accountSettings.per_symbol_caps || {}, null, 2));
     }
@@ -231,6 +233,7 @@ export default function Settings() {
           max_daily_loss_pct: maxDailyLoss,
           loss_streak_lock_threshold: lossStreakLock,
           lock_duration_minutes: lockDuration,
+          risk_per_trade_pct: riskPerTradePct,
           two_step_confirm_enabled: twoStepConfirm,
           per_symbol_caps: parsedCaps,
         })
@@ -547,6 +550,17 @@ export default function Settings() {
                 <span className="font-mono font-medium">{maxDailyLoss}%</span>
               </div>
               <Slider value={[maxDailyLoss]} onValueChange={([v]) => setMaxDailyLoss(v)} min={0.5} max={10} step={0.5} />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Risk Per Trade %</Label>
+                  <p className="text-xs text-muted-foreground">Position size based on account equity</p>
+                </div>
+                <span className="font-mono font-medium">{riskPerTradePct}%</span>
+              </div>
+              <Slider value={[riskPerTradePct]} onValueChange={([v]) => setRiskPerTradePct(v)} min={0.25} max={5} step={0.25} />
             </div>
 
             <div className="space-y-2">

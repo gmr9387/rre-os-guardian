@@ -16,6 +16,7 @@ import {
   usePendingCandidates 
 } from "@/hooks/useDashboardData";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { AlertCircle } from "lucide-react";
 
 export default function Dashboard() {
@@ -27,6 +28,9 @@ export default function Dashboard() {
   const { data: recentStopouts, isLoading: recentLoading } = useRecentStopouts(3);
   const { data: candidates, isLoading: candidatesLoading } = usePendingCandidates();
   const { execute, ignore, adjust } = useCandidateActions();
+  
+  // Enable real-time updates
+  useRealtimeSubscription();
 
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<{
