@@ -13,6 +13,7 @@ import History from "@/pages/History";
 import Playbook from "@/pages/Playbook";
 import Insights from "@/pages/Insights";
 import Settings from "@/pages/Settings";
+import Legal from "@/pages/Legal";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -58,6 +59,7 @@ const App = () => (
               <Route path="playbook" element={<Playbook />} />
               <Route path="insights" element={<Insights />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="legal" element={<Legal />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

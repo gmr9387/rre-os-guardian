@@ -17,6 +17,7 @@ const navItems = [
   { icon: BookOpen, label: "Playbook", path: "/app/playbook" },
   { icon: BarChart3, label: "Insights", path: "/app/insights" },
   { icon: Settings, label: "Settings", path: "/app/settings" },
+  { icon: Shield, label: "Legal", path: "/app/legal" },
 ];
 
 interface SidebarProps {
