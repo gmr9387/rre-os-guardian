@@ -14,7 +14,9 @@ import Playbook from "@/pages/Playbook";
 import Insights from "@/pages/Insights";
 import Settings from "@/pages/Settings";
 import Legal from "@/pages/Legal";
+import Privacy from "@/pages/Privacy";
 import NotFound from "@/pages/NotFound";
+import { CookieConsentBanner } from "@/components/common/CookieConsentBanner";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +43,7 @@ const App = () => (
           }}
         />
         <BrowserRouter>
+          <CookieConsentBanner />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
@@ -60,6 +63,7 @@ const App = () => (
               <Route path="insights" element={<Insights />} />
               <Route path="settings" element={<Settings />} />
               <Route path="legal" element={<Legal />} />
+              <Route path="privacy" element={<Privacy />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -1,5 +1,5 @@
 import { ArrowLeft, Shield, AlertTriangle, Scale, FileText } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 export default function Legal() {
@@ -157,9 +157,14 @@ export default function Legal() {
         </div>
       </section>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Last updated: February 2026
-      </p>
+      <div className="text-center space-y-1">
+        <Link to="/app/privacy" className="text-sm text-primary underline underline-offset-2">
+          Privacy Policy & Cookie Policy →
+        </Link>
+        <p className="text-xs text-muted-foreground">
+          Last updated: February 2026
+        </p>
+      </div>
     </div>
   );
 }
