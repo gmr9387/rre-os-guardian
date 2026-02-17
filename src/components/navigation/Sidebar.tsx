@@ -6,7 +6,8 @@ import {
   BarChart3, 
   Settings,
   Shield,
-  ChevronLeft
+  ChevronLeft,
+  MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const navItems = [
   { icon: BookOpen, label: "Playbook", path: "/app/playbook" },
   { icon: BarChart3, label: "Insights", path: "/app/insights" },
   { icon: Settings, label: "Settings", path: "/app/settings" },
+  { icon: MessageSquare, label: "Support", path: "/app/support" },
   { icon: Shield, label: "Legal", path: "/app/legal" },
 ];
 
