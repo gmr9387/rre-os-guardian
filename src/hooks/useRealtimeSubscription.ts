@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { useActiveAccount } from './useActiveAccount';
 
 /**
@@ -30,6 +31,15 @@ export function useRealtimeSubscription() {
         (payload) => {
           console.log('[Realtime] Candidates changed:', payload.eventType);
           queryClient.invalidateQueries({ queryKey: ['pending_candidates'] });
+          if (payload.eventType === 'INSERT') {
+            const newCandidate = payload.new as { candidate_type?: string; score?: number; entry_price?: number };
+            const type = newCandidate.candidate_type?.toUpperCase() || 'NEW';
+            const score = newCandidate.score ?? 0;
+            toast.info(`🎯 New ${type} candidate (Score: ${score})`, {
+              description: 'A new re-entry opportunity is ready for review.',
+              duration: 8000,
+            });
+          }
         }
       )
       .subscribe();

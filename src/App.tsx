@@ -13,6 +13,7 @@ import History from "@/pages/History";
 import Playbook from "@/pages/Playbook";
 import Insights from "@/pages/Insights";
 import Settings from "@/pages/Settings";
+import Support from "@/pages/Support";
 import Legal from "@/pages/Legal";
 import Privacy from "@/pages/Privacy";
 import NotFound from "@/pages/NotFound";
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="playbook" element={<Playbook />} />
               <Route path="insights" element={<Insights />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="support" element={<Support />} />
               <Route path="legal" element={<Legal />} />
               <Route path="privacy" element={<Privacy />} />
             </Route>
