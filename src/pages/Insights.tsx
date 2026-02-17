@@ -36,6 +36,9 @@ export default function Insights() {
     );
   }
 
+  const strengths = insights.alpha_fingerprint?.strengths ?? [];
+  const weaknesses = insights.alpha_fingerprint?.weaknesses ?? [];
+  const avoidConditions = insights.avoid_conditions ?? [];
   const hasTradeData = insights.best_symbols.length > 0;
 
   return (
@@ -60,12 +63,14 @@ export default function Insights() {
             Strengths
           </h3>
           <ul className="space-y-2">
-            {insights.alpha_fingerprint.strengths.map((strength, idx) => (
+            {strengths.length > 0 ? strengths.map((strength, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm">
                 <Zap className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 {strength}
               </li>
-            ))}
+            )) : (
+              <li className="text-sm text-muted-foreground">No strengths data yet. Complete more trades.</li>
+            )}
           </ul>
         </div>
 
@@ -76,12 +81,14 @@ export default function Insights() {
             Areas for Improvement
           </h3>
           <ul className="space-y-2">
-            {insights.alpha_fingerprint.weaknesses.map((weakness, idx) => (
+            {weaknesses.length > 0 ? weaknesses.map((weakness, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm">
                 <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 {weakness}
               </li>
-            ))}
+            )) : (
+              <li className="text-sm text-muted-foreground">No improvement areas identified yet.</li>
+            )}
           </ul>
         </div>
       </div>
@@ -226,11 +233,13 @@ export default function Insights() {
           Conditions to Avoid
         </h3>
         <div className="flex flex-wrap gap-2">
-          {insights.avoid_conditions.map((condition, idx) => (
+          {avoidConditions.length > 0 ? avoidConditions.map((condition, idx) => (
             <Badge key={idx} variant="locked" className="text-sm">
               {condition}
             </Badge>
-          ))}
+          )) : (
+            <p className="text-sm text-muted-foreground">No avoid conditions identified yet.</p>
+          )}
         </div>
       </div>
 
