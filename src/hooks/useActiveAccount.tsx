@@ -25,6 +25,7 @@ interface AccountSettings {
   lock_duration_minutes: number;
   per_symbol_caps: Record<string, number>;
   two_step_confirm_enabled: boolean;
+  starting_balance: number;
 }
 
 interface ActiveAccountContextType {

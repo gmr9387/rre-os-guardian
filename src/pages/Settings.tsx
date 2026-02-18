@@ -74,6 +74,7 @@ export default function Settings() {
   const [riskPerTradePct, setRiskPerTradePct] = useState(1.0);
   const [twoStepConfirm, setTwoStepConfirm] = useState(false);
   const [perSymbolCaps, setPerSymbolCaps] = useState("{}");
+  const [startingBalance, setStartingBalance] = useState(10000);
 
   // Kill switch state
   const [killSwitchActive, setKillSwitchActive] = useState(false);
@@ -193,6 +194,7 @@ export default function Settings() {
       setRiskPerTradePct(Number(accountSettings.risk_per_trade_pct) || 1.0);
       setTwoStepConfirm(accountSettings.two_step_confirm_enabled);
       setPerSymbolCaps(JSON.stringify(accountSettings.per_symbol_caps || {}, null, 2));
+      setStartingBalance(Number((accountSettings as unknown as { starting_balance?: number }).starting_balance) || 10000);
     }
   }, [accountSettings]);
 
@@ -242,6 +244,7 @@ export default function Settings() {
           risk_per_trade_pct: riskPerTradePct,
           two_step_confirm_enabled: twoStepConfirm,
           per_symbol_caps: parsedCaps,
+          starting_balance: startingBalance,
         })
         .eq('account_id', activeAccount.id);
       if (error) throw error;
@@ -591,6 +594,19 @@ export default function Settings() {
                 <p className="text-xs text-muted-foreground">Require extra confirmation for trades</p>
               </div>
               <Switch checked={twoStepConfirm} onCheckedChange={setTwoStepConfirm} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Starting Balance (USD)</Label>
+              <p className="text-xs text-muted-foreground">Used to calculate your total P&L and portfolio performance on the dashboard.</p>
+              <Input
+                type="number"
+                value={startingBalance}
+                onChange={(e) => setStartingBalance(Number(e.target.value))}
+                min={0}
+                step={100}
+                placeholder="10000"
+              />
             </div>
 
             <div className="space-y-2">

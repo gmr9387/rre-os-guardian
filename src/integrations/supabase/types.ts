@@ -75,6 +75,7 @@ export type Database = {
           mode: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps: Json | null
           risk_per_trade_pct: number
+          starting_balance: number
           two_step_confirm_enabled: boolean
           updated_at: string
         }
@@ -91,6 +92,7 @@ export type Database = {
           mode?: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps?: Json | null
           risk_per_trade_pct?: number
+          starting_balance?: number
           two_step_confirm_enabled?: boolean
           updated_at?: string
         }
@@ -107,6 +109,7 @@ export type Database = {
           mode?: Database["public"]["Enums"]["trade_mode"]
           per_symbol_caps?: Json | null
           risk_per_trade_pct?: number
+          starting_balance?: number
           two_step_confirm_enabled?: boolean
           updated_at?: string
         }

@@ -1,0 +1,1 @@
+ALTER TABLE public.account_settings ADD COLUMN IF NOT EXISTS starting_balance numeric NOT NULL DEFAULT 10000;
