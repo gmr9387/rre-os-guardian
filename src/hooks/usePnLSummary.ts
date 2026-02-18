@@ -14,23 +14,31 @@ export interface PnLSummary {
 }
 
 export function usePnLSummary() {
-  const { activeAccount, accountSettings } = useActiveAccount();
+  const { activeAccount } = useActiveAccount();
 
   return useQuery<PnLSummary | null>({
     queryKey: ['pnl_summary', activeAccount?.id],
     queryFn: async () => {
       if (!activeAccount) return null;
 
-      const { data, error } = await supabase
-        .from('daily_metrics')
-        .select('realized_pnl, realized_r, date')
-        .eq('account_id', activeAccount.id)
-        .order('date', { ascending: true });
+      // Fetch both daily metrics and account settings in parallel
+      const [metricsResult, settingsResult] = await Promise.all([
+        supabase
+          .from('daily_metrics')
+          .select('realized_pnl, realized_r, date')
+          .eq('account_id', activeAccount.id)
+          .order('date', { ascending: true }),
+        supabase
+          .from('account_settings')
+          .select('starting_balance')
+          .eq('account_id', activeAccount.id)
+          .maybeSingle(),
+      ]);
 
-      if (error) throw error;
+      if (metricsResult.error) throw metricsResult.error;
 
-      const rows = data || [];
-      const startingBalance = accountSettings?.starting_balance ?? 10000;
+      const rows = metricsResult.data || [];
+      const startingBalance = Number(settingsResult.data?.starting_balance) || 10000;
       const totalPnl = rows.reduce((sum, r) => sum + (Number(r.realized_pnl) || 0), 0);
       const totalR = rows.reduce((sum, r) => sum + (Number(r.realized_r) || 0), 0);
       const today = new Date().toISOString().split('T')[0];

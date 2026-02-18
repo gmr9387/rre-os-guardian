@@ -55,7 +55,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { activeAccount } = useActiveAccount();
+  const { activeAccount, refetch: refetchAccount } = useActiveAccount();
   const queryClient = useQueryClient();
 
   // Account state
@@ -252,6 +252,8 @@ export default function Settings() {
     onSuccess: () => {
       toast.success("Risk rules saved");
       queryClient.invalidateQueries({ queryKey: ['account_settings'] });
+      queryClient.invalidateQueries({ queryKey: ['pnl_summary'] });
+      refetchAccount();
     },
     onError: (e) => toast.error("Failed to save: " + e.message),
   });
