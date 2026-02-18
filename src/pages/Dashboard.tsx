@@ -7,6 +7,7 @@ import { CandidateCard } from "@/components/dashboard/CandidateCard";
 import { ManualSignalCard } from "@/components/dashboard/ManualSignalCard";
 import { TestStopoutButton } from "@/components/dashboard/TestStopoutButton";
 import { AdjustCandidateModal } from "@/components/dashboard/AdjustCandidateModal";
+import { PnLSummaryCard } from "@/components/dashboard/PnLSummaryCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
@@ -18,6 +19,7 @@ import {
   useRecentStopouts,
   usePendingCandidates 
 } from "@/hooks/useDashboardData";
+import { usePnLSummary } from "@/hooks/usePnLSummary";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import { AlertCircle, Hand, Zap } from "lucide-react";
@@ -30,6 +32,7 @@ export default function Dashboard() {
   const { data: latestStopout, isLoading: stopoutLoading } = useLatestStopout();
   const { data: recentStopouts, isLoading: recentLoading } = useRecentStopouts(3);
   const { data: candidates, isLoading: candidatesLoading } = usePendingCandidates();
+  const { data: pnlSummary, isLoading: pnlLoading } = usePnLSummary();
   const { execute, ignore, adjust } = useCandidateActions();
   const { executionMode } = useExecutionMode();
   
@@ -108,6 +111,13 @@ export default function Dashboard() {
         <h1 className="text-xl font-bold">Re-Entry HUD</h1>
         <p className="text-sm text-muted-foreground">Real-time trading intelligence</p>
       </div>
+
+      {/* P&L Summary */}
+      {pnlLoading || accountLoading ? (
+        <Skeleton className="h-36 w-full" />
+      ) : pnlSummary ? (
+        <PnLSummaryCard summary={pnlSummary} />
+      ) : null}
 
       {/* Health Banner */}
       {isLoading ? (
