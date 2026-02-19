@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { MainLayout } from "@/layouts/MainLayout";
 import Login from "@/pages/Login";
+import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import CandidateDetail from "@/pages/CandidateDetail";
 import History from "@/pages/History";
@@ -46,8 +47,8 @@ const App = () => (
         <BrowserRouter>
           <CookieConsentBanner />
           <Routes>
+            <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
             <Route
               path="/app"
               element={
