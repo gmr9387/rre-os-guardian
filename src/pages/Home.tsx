@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import heroDashboard from "@/assets/hero-dashboard.png";
 import {
   Shield,
   ArrowRight,
@@ -143,6 +144,30 @@ export default function Home() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           )}
+        </div>
+
+        {/* Hero Dashboard Image */}
+        <div className="relative mt-16 mx-auto max-w-5xl">
+          {/* Glow behind the image */}
+          <div className="absolute -inset-4 rounded-2xl bg-primary/10 blur-2xl" />
+          {/* Border frame */}
+          <div className="relative rounded-2xl border border-primary/20 overflow-hidden shadow-2xl">
+            {/* Top bar chrome effect */}
+            <div className="flex items-center gap-1.5 bg-card/80 px-4 py-3 border-b border-border/50 backdrop-blur">
+              <div className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+              <div className="h-2.5 w-2.5 rounded-full bg-warning/70" />
+              <div className="h-2.5 w-2.5 rounded-full bg-success/70" />
+              <span className="ml-3 font-mono text-xs text-muted-foreground/60">RRE OS PRO — Dashboard</span>
+            </div>
+            <img
+              src={heroDashboard}
+              alt="RRE OS PRO trading dashboard"
+              className="w-full object-cover"
+              loading="eager"
+            />
+            {/* Bottom fade overlay */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background/60 to-transparent" />
+          </div>
         </div>
       </section>
 
