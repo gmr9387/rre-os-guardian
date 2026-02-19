@@ -228,19 +228,19 @@ export default function Home() {
         <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
           <button
             className="hover:text-foreground transition-colors"
-            onClick={() => navigate("/app/legal")}
+          onClick={() => navigate("/legal")}
           >
             Terms
           </button>
           <button
             className="hover:text-foreground transition-colors"
-            onClick={() => navigate("/app/privacy")}
+            onClick={() => navigate("/privacy")}
           >
             Privacy
           </button>
           <button
             className="hover:text-foreground transition-colors"
-            onClick={() => navigate("/app/support")}
+            onClick={() => navigate("/support")}
           >
             Support
           </button>
