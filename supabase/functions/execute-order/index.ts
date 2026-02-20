@@ -80,7 +80,8 @@ serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
     );
 
     const { candidate_id, account_id }: ExecuteOrderRequest = await req.json();
@@ -91,12 +92,28 @@ serve(async (req) => {
 
     console.log(`[execute-order] Processing candidate ${candidate_id} for account ${account_id}`);
 
-    // Fetch the candidate with stopout event data (for symbol and side)
-    const { data: candidate, error: candidateError } = await supabase
-      .from('reentry_candidates')
-      .select('*, stopout_event:stopout_events(*)')
-      .eq('id', candidate_id)
-      .single();
+    // Fetch candidate, broker connection, and account settings in parallel
+    const [
+      { data: candidate, error: candidateError },
+      { data: brokerConnection },
+      { data: accountSettings },
+    ] = await Promise.all([
+      supabase
+        .from('reentry_candidates')
+        .select('*, stopout_event:stopout_events(*)')
+        .eq('id', candidate_id)
+        .single(),
+      supabase
+        .from('broker_connections')
+        .select('*')
+        .eq('account_id', account_id)
+        .single(),
+      supabase
+        .from('account_settings')
+        .select('risk_per_trade_pct')
+        .eq('account_id', account_id)
+        .single(),
+    ]);
 
     if (candidateError || !candidate) {
       throw new Error(`Candidate not found: ${candidateError?.message}`);
@@ -111,20 +128,6 @@ serve(async (req) => {
     }
 
     console.log(`[execute-order] Candidate: ${symbol} ${direction} @ ${candidate.entry_price}`);
-
-    // Fetch broker connection
-    const { data: brokerConnection, error: brokerError } = await supabase
-      .from('broker_connections')
-      .select('*')
-      .eq('account_id', account_id)
-      .single();
-
-    // Fetch account settings for position sizing
-    const { data: accountSettings } = await supabase
-      .from('account_settings')
-      .select('risk_per_trade_pct')
-      .eq('account_id', account_id)
-      .single();
 
     const riskPerTradePct = accountSettings?.risk_per_trade_pct || 1.0;
 
@@ -297,24 +300,24 @@ serve(async (req) => {
       throw new Error(`Failed to record execution: ${execError.message}`);
     }
 
-    // Update candidate status
-    const { error: updateError } = await supabase
-      .from('reentry_candidates')
-      .update({ status: 'executed' })
-      .eq('id', candidate_id);
+    // Update candidate status and fetch today's daily metric in parallel
+    const today = new Date().toISOString().split('T')[0];
+    const [{ error: updateError }, { data: dailyMetric }] = await Promise.all([
+      supabase
+        .from('reentry_candidates')
+        .update({ status: 'executed' })
+        .eq('id', candidate_id),
+      supabase
+        .from('daily_metrics')
+        .select('reentries_used')
+        .eq('account_id', account_id)
+        .eq('date', today)
+        .maybeSingle(),
+    ]);
 
     if (updateError) {
       console.error(`[execute-order] Failed to update candidate status:`, updateError);
     }
-
-    // Increment reentries_used for today
-    const today = new Date().toISOString().split('T')[0];
-    const { data: dailyMetric } = await supabase
-      .from('daily_metrics')
-      .select('reentries_used')
-      .eq('account_id', account_id)
-      .eq('date', today)
-      .maybeSingle();
 
     if (dailyMetric) {
       await supabase
