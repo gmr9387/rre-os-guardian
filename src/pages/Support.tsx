@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Send, MessageSquare, CheckCircle } from "lucide-react";
+import { Send, MessageSquare, CheckCircle, ArrowLeft } from "lucide-react";
 import { z } from "zod";
+import { useNavigate } from "react-router-dom";
 
 const ticketSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -17,6 +18,7 @@ const ticketSchema = z.object({
 });
 
 export default function Support() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [name, setName] = useState(user?.user_metadata?.display_name || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -73,9 +75,14 @@ export default function Support() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Contact & Support</h1>
-        <p className="text-muted-foreground mt-1">Have a question, bug report, or feature request? Let us know.</p>
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold">Contact & Support</h1>
+          <p className="text-sm text-muted-foreground">Have a question, bug report, or feature request?</p>
+        </div>
       </div>
 
       <Card className="glass-card">

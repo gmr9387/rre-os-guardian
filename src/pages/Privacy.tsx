@@ -8,7 +8,7 @@ export default function Privacy() {
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
