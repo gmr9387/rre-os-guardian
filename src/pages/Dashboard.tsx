@@ -8,6 +8,7 @@ import { ManualSignalCard } from "@/components/dashboard/ManualSignalCard";
 import { TestStopoutButton } from "@/components/dashboard/TestStopoutButton";
 import { AdjustCandidateModal } from "@/components/dashboard/AdjustCandidateModal";
 import { PnLSummaryCard } from "@/components/dashboard/PnLSummaryCard";
+import { EquityCurveChart } from "@/components/dashboard/EquityCurveChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useActiveAccount } from "@/hooks/useActiveAccount";
@@ -118,6 +119,9 @@ export default function Dashboard() {
       ) : pnlSummary ? (
         <PnLSummaryCard summary={pnlSummary} />
       ) : null}
+
+      {/* Equity Curve */}
+      <EquityCurveChart />
 
       {/* Health Banner */}
       {isLoading ? (
