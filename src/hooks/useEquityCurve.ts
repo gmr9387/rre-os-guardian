@@ -6,6 +6,8 @@ export interface EquityPoint {
   date: string;
   balance: number;
   pnl: number;
+  cumulativeR: number;
+  dailyR: number;
 }
 
 export function useEquityCurve() {
@@ -19,7 +21,7 @@ export function useEquityCurve() {
       const [metricsResult, settingsResult] = await Promise.all([
         supabase
           .from('daily_metrics')
-          .select('realized_pnl, date')
+          .select('realized_pnl, realized_r, date')
           .eq('account_id', activeAccount.id)
           .order('date', { ascending: true }),
         supabase
@@ -34,18 +36,23 @@ export function useEquityCurve() {
       const rows = metricsResult.data || [];
       const startingBalance = Number(settingsResult.data?.starting_balance) || 10000;
 
-      let cumulative = startingBalance;
+      let cumBalance = startingBalance;
+      let cumR = 0;
       const points: EquityPoint[] = [
-        { date: 'Start', balance: startingBalance, pnl: 0 },
+        { date: 'Start', balance: startingBalance, pnl: 0, cumulativeR: 0, dailyR: 0 },
       ];
 
       for (const row of rows) {
         const pnl = Number(row.realized_pnl) || 0;
-        cumulative += pnl;
+        const r = Number(row.realized_r) || 0;
+        cumBalance += pnl;
+        cumR += r;
         points.push({
           date: row.date,
-          balance: cumulative,
+          balance: cumBalance,
           pnl,
+          cumulativeR: Math.round(cumR * 10) / 10,
+          dailyR: Math.round(r * 10) / 10,
         });
       }
 
