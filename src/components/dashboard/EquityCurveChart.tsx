@@ -88,8 +88,12 @@ export function EquityCurveChart() {
             tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+            tickFormatter={(v) => {
+              if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(1)}k`;
+              return `$${v.toFixed(0)}`;
+            }}
             domain={[minBalance - padding, maxBalance + padding]}
+            tickCount={5}
             width={45}
           />
           <Tooltip content={<CustomTooltip />} />
