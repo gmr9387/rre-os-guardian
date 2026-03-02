@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useEquityCurve, type EquityPoint } from '@/hooks/useEquityCurve';
+
+type ChartMode = 'balance' | 'r';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -12,11 +15,28 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, mode }: any) {
   if (!active || !payload?.length) return null;
   const data = payload[0].payload as EquityPoint;
-  const isPositive = data.pnl >= 0;
 
+  if (mode === 'r') {
+    const isPositive = data.cumulativeR >= 0;
+    return (
+      <div className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-lg">
+        <p className="text-xs text-muted-foreground mb-1">{label}</p>
+        <p className={`text-sm font-mono font-semibold ${isPositive ? 'text-success' : 'text-destructive'}`}>
+          {isPositive ? '+' : ''}{data.cumulativeR.toFixed(1)}R
+        </p>
+        {data.date !== 'Start' && (
+          <p className={`text-xs font-mono mt-0.5 ${data.dailyR >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {data.dailyR >= 0 ? '+' : ''}{data.dailyR.toFixed(1)}R day
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const isPositive = data.pnl >= 0;
   return (
     <div className="rounded-lg border border-border/50 bg-card px-3 py-2 shadow-lg">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -34,6 +54,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export function EquityCurveChart() {
   const { data: points, isLoading } = useEquityCurve();
+  const [mode, setMode] = useState<ChartMode>('balance');
 
   if (isLoading) {
     return <Skeleton className="h-52 w-full" />;
@@ -47,18 +68,47 @@ export function EquityCurveChart() {
     );
   }
 
-  const startBalance = points[0].balance;
-  const endBalance = points[points.length - 1].balance;
-  const isUp = endBalance >= startBalance;
-  const minBalance = Math.min(...points.map(p => p.balance));
-  const maxBalance = Math.max(...points.map(p => p.balance));
-  const padding = (maxBalance - minBalance) * 0.15 || 500;
+  const dataKey = mode === 'balance' ? 'balance' : 'cumulativeR';
+  const values = points.map(p => p[dataKey]);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const range = maxVal - minVal;
+  const padding = range * 0.15 || (mode === 'balance' ? 500 : 1);
+  const refLine = mode === 'balance' ? points[0].balance : 0;
+  const endVal = values[values.length - 1];
+  const isUp = mode === 'balance' ? endVal >= points[0].balance : endVal >= 0;
 
   return (
     <div className="glass-card p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <TrendingUp className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-semibold">Equity Curve</h3>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Equity Curve</h3>
+        </div>
+        <div className="flex items-center rounded-lg border border-border/50 bg-muted/30 p-0.5">
+          <button
+            onClick={() => setMode('balance')}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+              mode === 'balance'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <DollarSign className="h-3 w-3" />
+            P&L
+          </button>
+          <button
+            onClick={() => setMode('r')}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+              mode === 'r'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <BarChart3 className="h-3 w-3" />
+            R
+          </button>
+        </div>
       </div>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
@@ -89,22 +139,23 @@ export function EquityCurveChart() {
             tickLine={false}
             axisLine={false}
             tickFormatter={(v) => {
+              if (mode === 'r') return `${v >= 0 ? '+' : ''}${v.toFixed(1)}R`;
               if (Math.abs(v) >= 1000) return `$${(v / 1000).toFixed(1)}k`;
               return `$${v.toFixed(0)}`;
             }}
-            domain={[minBalance - padding, maxBalance + padding]}
+            domain={[minVal - padding, maxVal + padding]}
             tickCount={5}
-            width={45}
+            width={50}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip mode={mode} />} />
           <ReferenceLine
-            y={startBalance}
+            y={refLine}
             stroke="hsl(var(--muted-foreground) / 0.4)"
             strokeDasharray="4 4"
           />
           <Area
             type="monotone"
-            dataKey="balance"
+            dataKey={dataKey}
             stroke={isUp ? 'hsl(var(--success))' : 'hsl(var(--destructive))'}
             strokeWidth={2}
             fill="url(#equityGradient)"
