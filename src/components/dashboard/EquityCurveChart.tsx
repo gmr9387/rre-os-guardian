@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp, DollarSign, BarChart3, CalendarIcon, X } from 'lucide-react';
-import { format, parseISO, isAfter, isBefore, startOfDay } from 'date-fns';
+import { format, parseISO, isAfter, isBefore, startOfDay, subDays, subMonths } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -62,6 +62,14 @@ export function EquityCurveChart() {
   const [mode, setMode] = useState<ChartMode>('balance');
   const [fromDate, setFromDate] = useState<Date | undefined>();
   const [toDate, setToDate] = useState<Date | undefined>();
+  const [activePreset, setActivePreset] = useState<string>('all');
+
+  const presets = [
+    { label: '1W', fn: () => { const d = subDays(new Date(), 7); setFromDate(d); setToDate(undefined); setActivePreset('1W'); } },
+    { label: '1M', fn: () => { const d = subMonths(new Date(), 1); setFromDate(d); setToDate(undefined); setActivePreset('1M'); } },
+    { label: '3M', fn: () => { const d = subMonths(new Date(), 3); setFromDate(d); setToDate(undefined); setActivePreset('3M'); } },
+    { label: 'All', fn: () => { setFromDate(undefined); setToDate(undefined); setActivePreset('all'); } },
+  ];
 
   const filteredPoints = useMemo(() => {
     if (!points) return undefined;
@@ -102,7 +110,7 @@ export function EquityCurveChart() {
   const endVal = values[values.length - 1];
   const isUp = mode === 'balance' ? endVal >= filteredPoints[0].balance : endVal >= 0;
 
-  const hasFilter = !!fromDate || !!toDate;
+  
 
   return (
     <div className="glass-card p-4">
@@ -139,6 +147,21 @@ export function EquityCurveChart() {
 
       {/* Date Range Filter */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <div className="flex items-center rounded-lg border border-border/50 bg-muted/30 p-0.5">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              onClick={p.fn}
+              className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                activePreset === (p.label === 'All' ? 'all' : p.label)
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className={cn("h-7 text-xs gap-1", !fromDate && "text-muted-foreground")}>
@@ -150,7 +173,7 @@ export function EquityCurveChart() {
             <Calendar
               mode="single"
               selected={fromDate}
-              onSelect={setFromDate}
+              onSelect={(d) => { setFromDate(d); setActivePreset('custom'); }}
               disabled={(date) => (toDate ? isAfter(date, toDate) : false)}
               initialFocus
               className={cn("p-3 pointer-events-auto")}
@@ -169,19 +192,19 @@ export function EquityCurveChart() {
             <Calendar
               mode="single"
               selected={toDate}
-              onSelect={setToDate}
+              onSelect={(d) => { setToDate(d); setActivePreset('custom'); }}
               disabled={(date) => (fromDate ? isBefore(date, fromDate) : false)}
               initialFocus
               className={cn("p-3 pointer-events-auto")}
             />
           </PopoverContent>
         </Popover>
-        {hasFilter && (
+        {activePreset === 'custom' && (fromDate || toDate) && (
           <Button
             variant="ghost"
             size="sm"
             className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-            onClick={() => { setFromDate(undefined); setToDate(undefined); }}
+            onClick={() => { setFromDate(undefined); setToDate(undefined); setActivePreset('all'); }}
           >
             <X className="h-3 w-3" />
             Clear
