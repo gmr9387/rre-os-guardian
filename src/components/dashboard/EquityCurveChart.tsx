@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart3, CalendarIcon, X } from 'lucide-react';
+import { format, parseISO, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { useEquityCurve, type EquityPoint } from '@/hooks/useEquityCurve';
 
 type ChartMode = 'balance' | 'r';
@@ -55,32 +60,53 @@ function CustomTooltip({ active, payload, label, mode }: any) {
 export function EquityCurveChart() {
   const { data: points, isLoading } = useEquityCurve();
   const [mode, setMode] = useState<ChartMode>('balance');
+  const [fromDate, setFromDate] = useState<Date | undefined>();
+  const [toDate, setToDate] = useState<Date | undefined>();
+
+  const filteredPoints = useMemo(() => {
+    if (!points) return undefined;
+    if (!fromDate && !toDate) return points;
+
+    return points.filter((p) => {
+      if (p.date === 'Start') return !fromDate; // keep Start only if no from filter
+      const d = startOfDay(parseISO(p.date));
+      if (fromDate && isBefore(d, startOfDay(fromDate))) return false;
+      if (toDate && isAfter(d, startOfDay(toDate))) return false;
+      return true;
+    });
+  }, [points, fromDate, toDate]);
 
   if (isLoading) {
     return <Skeleton className="h-52 w-full" />;
   }
 
-  if (!points || points.length <= 1) {
+  if (!filteredPoints || filteredPoints.length <= 1) {
     return (
       <div className="glass-card p-6 text-center">
-        <p className="text-muted-foreground text-sm">No trading data yet for the equity curve.</p>
+        <p className="text-muted-foreground text-sm">
+          {points && points.length > 1
+            ? 'No data in the selected date range.'
+            : 'No trading data yet for the equity curve.'}
+        </p>
       </div>
     );
   }
 
   const dataKey = mode === 'balance' ? 'balance' : 'cumulativeR';
-  const values = points.map(p => p[dataKey]);
+  const values = filteredPoints.map(p => p[dataKey]);
   const minVal = Math.min(...values);
   const maxVal = Math.max(...values);
   const range = maxVal - minVal;
   const padding = range * 0.15 || (mode === 'balance' ? 500 : 1);
-  const refLine = mode === 'balance' ? points[0].balance : 0;
+  const refLine = mode === 'balance' ? filteredPoints[0].balance : 0;
   const endVal = values[values.length - 1];
-  const isUp = mode === 'balance' ? endVal >= points[0].balance : endVal >= 0;
+  const isUp = mode === 'balance' ? endVal >= filteredPoints[0].balance : endVal >= 0;
+
+  const hasFilter = !!fromDate || !!toDate;
 
   return (
     <div className="glass-card p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold">Equity Curve</h3>
@@ -110,8 +136,60 @@ export function EquityCurveChart() {
           </button>
         </div>
       </div>
+
+      {/* Date Range Filter */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("h-7 text-xs gap-1", !fromDate && "text-muted-foreground")}>
+              <CalendarIcon className="h-3 w-3" />
+              {fromDate ? format(fromDate, 'MMM d, yyyy') : 'From'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={fromDate}
+              onSelect={setFromDate}
+              disabled={(date) => (toDate ? isAfter(date, toDate) : false)}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+        <span className="text-xs text-muted-foreground">–</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("h-7 text-xs gap-1", !toDate && "text-muted-foreground")}>
+              <CalendarIcon className="h-3 w-3" />
+              {toDate ? format(toDate, 'MMM d, yyyy') : 'To'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={toDate}
+              onSelect={setToDate}
+              disabled={(date) => (fromDate ? isBefore(date, fromDate) : false)}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+        {hasFilter && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+            onClick={() => { setFromDate(undefined); setToDate(undefined); }}
+          >
+            <X className="h-3 w-3" />
+            Clear
+          </Button>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+        <AreaChart data={filteredPoints} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
           <defs>
             <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
               <stop
