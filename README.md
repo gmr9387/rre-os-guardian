@@ -117,14 +117,21 @@ Open `http://localhost:5173`. HMR is enabled — changes reflect instantly.
 
 ## Configuration
 
-All config is environment-variable driven. No secrets in code.
+All config is environment-variable driven. No secrets in code, and no committed `.env`.
+
+Copy the template and fill in your own values:
+
+```bash
+cp .env.example .env
+```
 
 | Variable                          | Required | Description                  |
 | --------------------------------- | -------- | ---------------------------- |
 | `VITE_SUPABASE_URL`              | ✅        | Backend project URL          |
-| `VITE_SUPABASE_PUBLISHABLE_KEY`  | ✅        | Backend public anon key      |
+| `VITE_SUPABASE_PUBLISHABLE_KEY`  | ✅        | Backend public anon key (safe to expose; RLS protects data) |
+| `VITE_SUPABASE_PROJECT_ID`       | ⬜        | Backend project reference id |
 
-These are auto-configured when running via Lovable Cloud.
+These are injected automatically for hosted builds.
 
 -----
 
