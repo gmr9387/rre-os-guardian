@@ -117,13 +117,14 @@ Open `http://localhost:5173`. HMR is enabled — changes reflect instantly.
 
 ## Configuration
 
-All config is environment-variable driven. No secrets in code, and no committed `.env`.
+All config is environment-variable driven. No secrets in code.
 
-Copy the template and fill in your own values:
+The project's `.env` file holds the backend connection values and is provisioned automatically. A `.env.example` is included as a reference template if you need to recreate it:
 
 ```bash
-cp .env.example .env
+cat .env
 ```
+
 
 | Variable                          | Required | Description                  |
 | --------------------------------- | -------- | ---------------------------- |
