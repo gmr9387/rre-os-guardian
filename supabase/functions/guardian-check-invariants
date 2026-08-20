@@ -1,0 +1,204 @@
+// supabase/functions/guardian-check-invariants/index.ts
+// RRE-OS Guardian — Invariant Check Engine (Generation 1)
+//
+// Responsibilities:
+//   - Validate core domain invariants for Guardian
+//   - Detect inconsistent candidate / execution / stopout state
+//   - Detect missing or invalid account configuration
+//   - Detect broken history / performance links
+//   - Emit a summary of invariant violations
+//
+// Contract:
+//   - Read-only against core tables (no mutations)
+//   - Idempotent
+//   - Safe to run on a schedule or manually
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+serve(async (req) => {
+  const body = await req.json().catch(() => ({}));
+  const { account_id } = body;
+
+  if (!account_id) {
+    return new Response("missing-account-id", { status: 400 });
+  }
+
+  const violations: any[] = [];
+
+  // 1. Account + settings invariants
+  const account = await loadAccount(account_id);
+  const settings = await loadAccountSettings(account_id);
+
+  if (!account) {
+    violations.push({
+      type: "account-missing",
+      account_id,
+      severity: "critical",
+    });
+  }
+
+  if (!settings) {
+    violations.push({
+      type: "settings-missing",
+      account_id,
+      severity: "high",
+    });
+  }
+
+  // 2. Stopout → candidate invariants
+  const stopouts = await loadStopouts(account_id);
+  const candidates = await loadCandidates(account_id);
+
+  const stopoutIds = new Set(stopouts.map((s: any) => s.id));
+  const candidateStopoutIds = new Set(
+    candidates.map((c: any) => c.stopout_id).filter(Boolean)
+  );
+
+  for (const cid of candidateStopoutIds) {
+    if (!stopoutIds.has(cid)) {
+      violations.push({
+        type: "candidate-orphaned-stopout",
+        stopout_id: cid,
+        severity: "medium",
+      });
+    }
+  }
+
+  // 3. Candidate → execution invariants
+  const executions = await loadExecutions(account_id);
+  const candidateIds = new Set(candidates.map((c: any) => c.id));
+  const executionCandidateIds = new Set(
+    executions.map((e: any) => e.candidate_id).filter(Boolean)
+  );
+
+  for (const ecid of executionCandidateIds) {
+    if (!candidateIds.has(ecid)) {
+      violations.push({
+        type: "execution-orphaned-candidate",
+        candidate_id: ecid,
+        severity: "high",
+      });
+    }
+  }
+
+  // 4. Execution state invariants
+  for (const exec of executions) {
+    if (!["pending", "authorized", "executed", "rejected"].includes(exec.state)) {
+      violations.push({
+        type: "execution-invalid-state",
+        execution_id: exec.id,
+        state: exec.state,
+        severity: "high",
+      });
+    }
+  }
+
+  // 5. Performance / history invariants
+  const trades = await loadTrades(account_id);
+  const pnl = await loadPnlEquity(account_id);
+
+  if (trades.length > 0 && pnl.length === 0) {
+    violations.push({
+      type: "pnl-missing-for-trades",
+      account_id,
+      severity: "medium",
+    });
+  }
+
+  // 6. Kill-switch / risk invariants
+  const killSwitch = await loadKillSwitch(account_id);
+  if (killSwitch && killSwitch.enabled && executions.some((e: any) => e.state === "executed")) {
+    violations.push({
+      type: "execution-while-kill-switch-enabled",
+      account_id,
+      severity: "critical",
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      status: "guardian-invariants-checked",
+      account_id,
+      violations,
+      violation_count: violations.length,
+    }),
+    { status: 200 }
+  );
+});
+
+// ------------------------------------------------------------
+// Loaders
+// ------------------------------------------------------------
+
+async function loadAccount(account_id: string) {
+  const { data } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("id", account_id)
+    .single();
+  return data ?? null;
+}
+
+async function loadAccountSettings(account_id: string) {
+  const { data } = await supabase
+    .from("account_settings")
+    .select("*")
+    .eq("account_id", account_id)
+    .single();
+  return data ?? null;
+}
+
+async function loadKillSwitch(account_id: string) {
+  const { data } = await supabase
+    .from("kill_switch_state")
+    .select("*")
+    .eq("account_id", account_id)
+    .single();
+  return data ?? null;
+}
+
+async function loadStopouts(account_id: string) {
+  const { data } = await supabase
+    .from("stopout_events")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function loadCandidates(account_id: string) {
+  const { data } = await supabase
+    .from("reentry_candidates")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function loadExecutions(account_id: string) {
+  const { data } = await supabase
+    .from("executions")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function loadTrades(account_id: string) {
+  const { data } = await supabase
+    .from("trade_history")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function loadPnlEquity(account_id: string) {
+  const { data } = await supabase
+    .from("pnl_equity")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
