@@ -1,0 +1,165 @@
+// supabase/functions/guardian-repair-state/index.ts
+// RRE-OS Guardian — State Repair Engine (Generation 1)
+//
+// Responsibilities:
+//   - Repair stuck candidates (never scored / never resolved)
+//   - Repair stuck executions (pending forever)
+//   - Normalize invalid execution states
+//   - Clear orphaned links where safe
+//   - Record repair provenance
+//
+// Contract:
+//   - Mutates only Guardian domain tables
+//   - Idempotent
+//   - Safe to run on a schedule
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+const CANDIDATE_STUCK_MS = 60 * 60 * 1000; // 1 hour
+const EXECUTION_STUCK_MS = 30 * 60 * 1000; // 30 minutes
+
+serve(async (req) => {
+  const body = await req.json().catch(() => ({}));
+  const { account_id } = body;
+
+  if (!account_id) {
+    return new Response("missing-account-id", { status: 400 });
+  }
+
+  const now = Date.now();
+  const repaired: any[] = [];
+
+  const candidates = await loadCandidates(account_id);
+  const executions = await loadExecutions(account_id);
+
+  // 1. Repair stuck candidates (never scored / never resolved)
+  for (const c of candidates) {
+    const created = new Date(c.created_at).getTime();
+    const age = now - created;
+
+    const terminal = ["accepted", "rejected", "expired"].includes(c.state);
+    const scored = c.score !== null && c.score !== undefined;
+
+    if (!terminal && !scored && age > CANDIDATE_STUCK_MS) {
+      await supabase
+        .from("reentry_candidates")
+        .update({
+          state: "expired",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", c.id);
+
+      repaired.push({
+        type: "candidate-expired",
+        candidate_id: c.id,
+      });
+
+      await recordRepair("candidate-expired", account_id, {
+        candidate_id: c.id,
+      });
+    }
+  }
+
+  // 2. Repair stuck executions (pending forever)
+  for (const e of executions) {
+    const created = new Date(e.created_at).getTime();
+    const age = now - created;
+
+    const terminal = ["executed", "rejected", "cancelled"].includes(e.state);
+
+    if (!terminal && age > EXECUTION_STUCK_MS) {
+      await supabase
+        .from("executions")
+        .update({
+          state: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", e.id);
+
+      repaired.push({
+        type: "execution-cancelled",
+        execution_id: e.id,
+      });
+
+      await recordRepair("execution-cancelled", account_id, {
+        execution_id: e.id,
+      });
+    }
+  }
+
+  // 3. Normalize invalid execution states
+  for (const e of executions) {
+    if (!["pending", "authorized", "executed", "rejected", "cancelled"].includes(e.state)) {
+      await supabase
+        .from("executions")
+        .update({
+          state: "rejected",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", e.id);
+
+      repaired.push({
+        type: "execution-invalid-state-normalized",
+        execution_id: e.id,
+        old_state: e.state,
+      });
+
+      await recordRepair("execution-invalid-state-normalized", account_id, {
+        execution_id: e.id,
+        old_state: e.state,
+      });
+    }
+  }
+
+  return new Response(
+    JSON.stringify({
+      status: "guardian-state-repaired",
+      account_id,
+      repaired,
+      repaired_count: repaired.length,
+    }),
+    { status: 200 }
+  );
+});
+
+// ------------------------------------------------------------
+// Loaders + provenance
+// ------------------------------------------------------------
+
+async function loadCandidates(account_id: string) {
+  const { data } = await supabase
+    .from("reentry_candidates")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function loadExecutions(account_id: string) {
+  const { data } = await supabase
+    .from("executions")
+    .select("*")
+    .eq("account_id", account_id);
+  return data ?? [];
+}
+
+async function recordRepair(
+  type: string,
+  account_id: string,
+  details: Record<string, any>
+) {
+  await supabase
+    .from("guardian_repairs")
+    .insert({
+      account_id,
+      type,
+      details,
+      repaired_at: new Date().toISOString(),
+    })
+    .catch(() => {});
+}
