@@ -1,0 +1,149 @@
+// supabase/functions/guardian-execution-authorize/index.ts
+// Guardian Backend — Execution Authorization (Generation 1)
+//
+// Purpose:
+//   Authorize or reject execution based on:
+//     - candidate score
+//     - candidate confidence
+//     - risk check function
+//     - account mode
+//
+// Input:
+//   {
+//     candidate_id: string,
+//     mode?: "assist" | "auto" | "safe" | "live" | "test" | "train"
+//   }
+//
+// Output:
+//   {
+//     status: "execution-evaluated",
+//     execution_id: string,
+//     authorized: boolean,
+//     reason: string
+//   }
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+serve(async (req) => {
+  try {
+    const body = await req.json();
+    const { candidate_id, mode = "assist" } = body;
+
+    if (!candidate_id) {
+      return new Response(
+        JSON.stringify({ error: "missing-candidate-id" }),
+        { status: 400 }
+      );
+    }
+
+    // Load candidate
+    const { data: candidate, error: candidateError } = await supabase
+      .from("guardian_candidates")
+      .select("*")
+      .eq("id", candidate_id)
+      .single();
+
+    if (candidateError || !candidate) {
+      return new Response(
+        JSON.stringify({
+          error: "candidate-not-found",
+          details: candidateError?.message,
+        }),
+        { status: 404 }
+      );
+    }
+
+    const account_id = candidate.account_id;
+
+    // --------------------------------------------
+    // 1. Run risk check function
+    // --------------------------------------------
+    const riskRes = await fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/guardian-risk-check`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ candidate_id }),
+      }
+    );
+
+    const riskJson = await riskRes.json();
+
+    const allowed = riskJson.allowed;
+    const reason = riskJson.reason || "Risk check failed";
+
+    // --------------------------------------------
+    // 2. Insert execution row
+    // --------------------------------------------
+    const executionState = allowed ? "authorized" : "rejected";
+
+    const { data: execution, error: execError } = await supabase
+      .from("guardian_executions")
+      .insert({
+        account_id,
+        candidate_id,
+        symbol: candidate.symbol,
+        side: candidate.side,
+        quantity: 1, // placeholder until sizing engine exists
+        state: executionState,
+        mode,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (execError) {
+      return new Response(
+        JSON.stringify({
+          error: "execution-create-failed",
+          details: execError.message,
+        }),
+        { status: 500 }
+      );
+    }
+
+    // --------------------------------------------
+    // 3. Update candidate status
+    // --------------------------------------------
+    const newStatus = allowed ? "executed" : "blocked";
+
+    await supabase
+      .from("guardian_candidates")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", candidate_id);
+
+    // --------------------------------------------
+    // 4. Return result
+    // --------------------------------------------
+    return new Response(
+      JSON.stringify({
+        status: "execution-evaluated",
+        execution_id: execution.id,
+        authorized: allowed,
+        reason,
+      }),
+      { status: 200 }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid-json",
+        details: String(err),
+      }),
+      { status: 400 }
+    );
+  }
+});
