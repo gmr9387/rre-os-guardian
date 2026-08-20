@@ -1,0 +1,213 @@
+// supabase/functions/guardian-candidate-score/index.ts
+// Guardian Backend — Candidate Scoring (Generation 1)
+//
+// Purpose:
+//   Take an existing candidate and compute:
+//     - RR (risk/reward)
+//     - confidence
+//     - score
+//
+// Input:
+//   {
+//     candidate_id: string
+//   }
+//
+// Output:
+//   {
+//     status: "candidate-scored",
+//     candidate_id: string,
+//     score: number,
+//     rr: number,
+//     confidence: number
+//   }
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
+
+serve(async (req) => {
+  try {
+    const body = await req.json();
+    const { candidate_id } = body;
+
+    if (!candidate_id) {
+      return new Response(
+        JSON.stringify({
+          error: "missing-candidate-id",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // Load candidate
+    const { data: candidate, error: candidateError } = await supabase
+      .from("guardian_candidates")
+      .select("*")
+      .eq("id", candidate_id)
+      .single();
+
+    if (candidateError || !candidate) {
+      return new Response(
+        JSON.stringify({
+          error: "candidate-not-found",
+          details: candidateError?.message,
+        }),
+        { status: 404 }
+      );
+    }
+
+    // Basic RR calculation:
+    // Assume we have entry, SL, TP in future; for now, use placeholder RR based on type + risk
+    const baseRR = getBaseRR(candidate.type, candidate.risk);
+    const sessionBoost = getSessionBoost(candidate.mode);
+    const volatilityAdj = getVolatilityAdj(candidate.symbol);
+
+    let rr = baseRR + sessionBoost + volatilityAdj;
+
+    // Clamp RR
+    rr = Math.max(1.0, Math.min(3.5, rr));
+
+    // Score + confidence from RR + type + risk
+    const { score, confidence } = interpretScore(rr, candidate.type, candidate.risk);
+
+    // Update candidate
+    const { error: updateError } = await supabase
+      .from("guardian_candidates")
+      .update({
+        rr,
+        score,
+        confidence,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", candidate_id);
+
+    if (updateError) {
+      return new Response(
+        JSON.stringify({
+          error: "candidate-score-update-failed",
+          details: updateError.message,
+        }),
+        { status: 500 }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        status: "candidate-scored",
+        candidate_id,
+        score,
+        rr,
+        confidence,
+      }),
+      { status: 200 }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: "invalid-json",
+        details: String(err),
+      }),
+      { status: 400 }
+    );
+  }
+});
+
+// ------------------------------------------------------------
+// Scoring helpers (simple, aligned with your frontend semantics)
+// ------------------------------------------------------------
+
+function getBaseRR(
+  type: string,
+  risk: string
+): number {
+  // Rough mapping based on your candidateEngine + configs
+  if (type === "reclaim") return risk === "aggressive" ? 2.8 : 2.5;
+  if (type === "retest") return risk === "conservative" ? 2.0 : 1.8;
+  if (type === "ladder") return risk === "aggressive" ? 3.0 : 2.4;
+  return 1.5;
+}
+
+function getSessionBoost(mode: string): number {
+  // Treat mode as a proxy for how "engaged" the system is
+  switch (mode) {
+    case "live":
+      return 0.3;
+    case "auto":
+      return 0.2;
+    case "assist":
+      return 0.1;
+    case "safe":
+      return 0.0;
+    case "test":
+    case "train":
+      return -0.1;
+    default:
+      return 0.0;
+  }
+}
+
+function getVolatilityAdj(symbol: string): number {
+  // Simple symbol-based adjustment; you can expand this later
+  const highVol = ["XAUUSD", "NAS100", "US30", "BTCUSD"];
+  const lowVol = ["EURUSD", "USDJPY"];
+
+  if (highVol.includes(symbol)) return -0.1;
+  if (lowVol.includes(symbol)) return 0.1;
+  return 0.0;
+}
+
+function interpretScore(
+  rr: number,
+  type: string,
+  risk: string
+): { score: number; confidence: number } {
+  let score = 50;
+  let confidence = 50;
+
+  // RR contribution
+  if (rr >= 3.0) {
+    score += 25;
+    confidence += 15;
+  } else if (rr >= 2.5) {
+    score += 20;
+    confidence += 10;
+  } else if (rr >= 2.0) {
+    score += 10;
+    confidence += 5;
+  } else if (rr >= 1.5) {
+    score += 5;
+  } else {
+    score -= 10;
+    confidence -= 5;
+  }
+
+  // Type contribution
+  if (type === "reclaim") {
+    score += 10;
+    confidence += 10;
+  } else if (type === "retest") {
+    score += 5;
+    confidence += 15;
+  } else if (type === "ladder") {
+    score += 0;
+    confidence -= 5;
+  }
+
+  // Risk contribution
+  if (risk === "conservative") {
+    confidence += 10;
+  } else if (risk === "aggressive") {
+    score += 5;
+    confidence -= 5;
+  }
+
+  // Clamp
+  score = Math.max(0, Math.min(100, score));
+  confidence = Math.max(10, Math.min(95, confidence));
+
+  return { score, confidence };
+}
