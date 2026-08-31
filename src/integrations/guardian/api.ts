@@ -34,6 +34,15 @@ export type GuardianScoringResponse = {
   weightedFlags: Record<string, number>;
 };
 
+export type GuardianKillSwitchResponse = {
+  claimId: string;
+  organizationId: string;
+  decision: "ALLOW" | "ADVISORY" | "SOFT_STOP" | "HARD_STOP";
+  reason: string;
+  flags: string[];
+  timestamp: string;
+};
+
 export type GuardianHealthResponse = {
   status: "healthy" | "degraded" | "down";
   runtime: string;
@@ -110,6 +119,27 @@ export async function runGuardianScoring(request: {
   return handleResponse<GuardianScoringResponse>(res);
 }
 
+export async function runGuardianKillSwitch(request: {
+  claimId: string;
+  organizationId: string;
+  riskTier: string;
+  flags: string[];
+}): Promise<GuardianKillSwitchResponse> {
+  const res = await fetch(
+    `${GUARDIAN_BASE_URL}/guardian/risk/kill-switch/run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-org-id": request.organizationId,
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  return handleResponse<GuardianKillSwitchResponse>(res);
+}
+
 export async function getGuardianHealth(
   organizationId: string
 ): Promise<GuardianHealthResponse> {
@@ -141,6 +171,22 @@ export async function getGuardianScoringHealth(
 ): Promise<GuardianHealthResponse> {
   const res = await fetch(
     `${GUARDIAN_BASE_URL}/guardian/risk/scoring/health`,
+    {
+      method: "GET",
+      headers: {
+        "x-org-id": organizationId,
+      },
+    }
+  );
+
+  return handleResponse<GuardianHealthResponse>(res);
+}
+
+export async function getGuardianKillSwitchHealth(
+  organizationId: string
+): Promise<GuardianHealthResponse> {
+  const res = await fetch(
+    `${GUARDIAN_BASE_URL}/guardian/risk/kill-switch/health`,
     {
       method: "GET",
       headers: {
