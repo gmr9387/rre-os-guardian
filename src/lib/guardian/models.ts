@@ -36,6 +36,15 @@ export type GuardianScoringModel = {
   weightedFlags: Record<string, number>;
 };
 
+export type GuardianKillSwitchModel = {
+  claimId: string;
+  organizationId: string;
+  decision: "ALLOW" | "ADVISORY" | "SOFT_STOP" | "HARD_STOP";
+  reason: string;
+  flags: GuardianFlag[];
+  timestamp: string;
+};
+
 export function mapRiskTier(score: number): RiskTier {
   if (score < 0.2) return "low";
   if (score < 0.5) return "medium";
@@ -104,5 +113,23 @@ export function buildGuardianScoringModel(input: {
     riskScore: input.riskScore,
     riskTier: input.riskTier,
     weightedFlags: input.weightedFlags,
+  };
+}
+
+export function buildGuardianKillSwitchModel(input: {
+  claimId: string;
+  organizationId: string;
+  decision: "ALLOW" | "ADVISORY" | "SOFT_STOP" | "HARD_STOP";
+  reason: string;
+  flags: string[];
+  timestamp: string;
+}): GuardianKillSwitchModel {
+  return {
+    claimId: input.claimId,
+    organizationId: input.organizationId,
+    decision: input.decision,
+    reason: input.reason,
+    flags: normalizeFlags(input.flags),
+    timestamp: input.timestamp,
   };
 }
