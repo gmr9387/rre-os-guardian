@@ -26,6 +26,14 @@ export type GuardianRuleEngineResponse = {
   details?: Record<string, any>;
 };
 
+export type GuardianScoringResponse = {
+  claimId: string;
+  organizationId: string;
+  riskScore: number;
+  riskTier: "low" | "medium" | "high" | "critical";
+  weightedFlags: Record<string, number>;
+};
+
 export type GuardianHealthResponse = {
   status: "healthy" | "degraded" | "down";
   runtime: string;
@@ -81,6 +89,27 @@ export async function runGuardianRules(
   return handleResponse<GuardianRuleEngineResponse>(res);
 }
 
+export async function runGuardianScoring(request: {
+  claimId: string;
+  organizationId: string;
+  flags: string[];
+  baseScore?: number;
+}): Promise<GuardianScoringResponse> {
+  const res = await fetch(
+    `${GUARDIAN_BASE_URL}/guardian/risk/scoring/run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-org-id": request.organizationId,
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  return handleResponse<GuardianScoringResponse>(res);
+}
+
 export async function getGuardianHealth(
   organizationId: string
 ): Promise<GuardianHealthResponse> {
@@ -103,6 +132,22 @@ export async function getGuardianRulesHealth(
       "x-org-id": organizationId,
     },
   });
+
+  return handleResponse<GuardianHealthResponse>(res);
+}
+
+export async function getGuardianScoringHealth(
+  organizationId: string
+): Promise<GuardianHealthResponse> {
+  const res = await fetch(
+    `${GUARDIAN_BASE_URL}/guardian/risk/scoring/health`,
+    {
+      method: "GET",
+      headers: {
+        "x-org-id": organizationId,
+      },
+    }
+  );
 
   return handleResponse<GuardianHealthResponse>(res);
 }
