@@ -1,0 +1,32 @@
+// src/nucleus/subsystems/guardian/guardianRiskScoringRouter.ts
+
+import { Router } from "express";
+import { GuardianRiskScoringController } from "./guardianRiskScoringController";
+
+export function guardianRiskScoringRouter() {
+  const router = Router();
+
+  router.post("/risk/scoring/run", async (req, res) => {
+    const organizationId = req.headers["x-org-id"] as string;
+    const controller = new GuardianRiskScoringController(organizationId);
+
+    const context = {
+      claimId: req.body.claimId,
+      organizationId,
+      flags: req.body.flags || [],
+      baseScore: req.body.baseScore,
+    };
+
+    const result = await controller.score(context);
+    res.json(result);
+  });
+
+  router.get("/risk/scoring/health", async (req, res) => {
+    const organizationId = req.headers["x-org-id"] as string;
+    const controller = new GuardianRiskScoringController(organizationId);
+    const result = await controller.health();
+    res.json(result);
+  });
+
+  return router;
+}
