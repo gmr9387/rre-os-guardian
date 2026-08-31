@@ -14,6 +14,18 @@ export type GuardianRiskResponse = {
   details?: Record<string, any>;
 };
 
+export type GuardianRuleEngineResponse = {
+  claimId: string;
+  organizationId: string;
+  rulesEvaluated: number;
+  passed: string[];
+  failed: string[];
+  flags: string[];
+  riskScore: number;
+  riskTier: "low" | "medium" | "high" | "critical";
+  details?: Record<string, any>;
+};
+
 export type GuardianHealthResponse = {
   status: "healthy" | "degraded" | "down";
   runtime: string;
@@ -48,10 +60,44 @@ export async function runGuardianRisk(
   return handleResponse<GuardianRiskResponse>(res);
 }
 
+export async function runGuardianRules(
+  request: GuardianRiskRequest
+): Promise<GuardianRuleEngineResponse> {
+  const res = await fetch(
+    `${GUARDIAN_BASE_URL}/guardian/risk/rules/evaluate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-org-id": request.organizationId,
+      },
+      body: JSON.stringify({
+        claimId: request.claimId,
+        payload: request.payload,
+      }),
+    }
+  );
+
+  return handleResponse<GuardianRuleEngineResponse>(res);
+}
+
 export async function getGuardianHealth(
   organizationId: string
 ): Promise<GuardianHealthResponse> {
   const res = await fetch(`${GUARDIAN_BASE_URL}/guardian/risk/health`, {
+    method: "GET",
+    headers: {
+      "x-org-id": organizationId,
+    },
+  });
+
+  return handleResponse<GuardianHealthResponse>(res);
+}
+
+export async function getGuardianRulesHealth(
+  organizationId: string
+): Promise<GuardianHealthResponse> {
+  const res = await fetch(`${GUARDIAN_BASE_URL}/guardian/risk/rules/health`, {
     method: "GET",
     headers: {
       "x-org-id": organizationId,
