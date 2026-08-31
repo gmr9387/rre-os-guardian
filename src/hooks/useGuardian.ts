@@ -8,7 +8,9 @@ export function useGuardian(organizationId: string) {
     loading: false,
     error: null,
     risk: null,
+    rules: null,
     health: { status: "unknown", timestamp: null },
+    rulesHealth: { status: "unknown", timestamp: null },
   });
 
   const runtime = new GuardianRuntime(organizationId);
@@ -17,11 +19,7 @@ export function useGuardian(organizationId: string) {
     async (claimId: string, payload: Record<string, any>) => {
       setState((prev) => ({ ...prev, loading: true, error: null }));
       const result = await runtime.evaluateClaim(claimId, payload);
-      const health = await runtime.checkHealth();
-      setState({
-        ...result,
-        health,
-      });
+      setState(result);
     },
     [runtime]
   );
@@ -30,11 +28,15 @@ export function useGuardian(organizationId: string) {
     let cancelled = false;
 
     (async () => {
-      const health = await runtime.checkHealth();
+      const [health, rulesHealth] = await Promise.all([
+        runtime.checkHealth(),
+        runtime.checkRulesHealth(),
+      ]);
       if (!cancelled) {
         setState((prev) => ({
           ...prev,
           health,
+          rulesHealth,
         }));
       }
     })();
