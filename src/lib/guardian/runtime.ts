@@ -3,15 +3,20 @@
 import {
   runGuardianRisk,
   runGuardianRules,
+  runGuardianScoring,
   getGuardianHealth,
   getGuardianRulesHealth,
+  getGuardianScoringHealth,
   GuardianRiskRequest,
 } from "../../integrations/guardian/api";
+
 import {
   buildGuardianRiskModel,
   buildGuardianRuleEngineModel,
+  buildGuardianScoringModel,
   GuardianRiskModel,
   GuardianRuleEngineModel,
+  GuardianScoringModel,
   mapRiskTier,
 } from "./models";
 
@@ -20,11 +25,16 @@ export type GuardianRuntimeState = {
   error: string | null;
   risk: GuardianRiskModel | null;
   rules: GuardianRuleEngineModel | null;
+  scoring: GuardianScoringModel | null;
   health: {
     status: "healthy" | "degraded" | "down" | "unknown";
     timestamp: string | null;
   };
   rulesHealth: {
+    status: "healthy" | "degraded" | "down" | "unknown";
+    timestamp: string | null;
+  };
+  scoringHealth: {
     status: "healthy" | "degraded" | "down" | "unknown";
     timestamp: string | null;
   };
@@ -46,8 +56,10 @@ export class GuardianRuntime {
       error: null,
       risk: null,
       rules: null,
+      scoring: null,
       health: { status: "unknown", timestamp: null },
       rulesHealth: { status: "unknown", timestamp: null },
+      scoringHealth: { status: "unknown", timestamp: null },
     };
 
     try {
@@ -85,9 +97,19 @@ export class GuardianRuntime {
         details: rulesResponse.details,
       });
 
-      const [health, rulesHealth] = await Promise.all([
+      const scoringResponse = await runGuardianScoring({
+        claimId,
+        organizationId: this.organizationId,
+        flags: rulesResponse.flags,
+        baseScore: riskResponse.riskScore,
+      });
+
+      const scoringModel = buildGuardianScoringModel(scoringResponse);
+
+      const [health, rulesHealth, scoringHealth] = await Promise.all([
         this.checkHealth(),
         this.checkRulesHealth(),
+        this.checkScoringHealth(),
       ]);
 
       return {
@@ -95,13 +117,16 @@ export class GuardianRuntime {
         loading: false,
         risk: riskModel,
         rules: rulesModel,
+        scoring: scoringModel,
         health,
         rulesHealth,
+        scoringHealth,
       };
     } catch (err: any) {
-      const [health, rulesHealth] = await Promise.all([
+      const [health, rulesHealth, scoringHealth] = await Promise.all([
         this.checkHealth(),
         this.checkRulesHealth(),
+        this.checkScoringHealth(),
       ]);
 
       return {
@@ -110,11 +135,12 @@ export class GuardianRuntime {
         error: err?.message || "Guardian evaluation failed",
         health,
         rulesHealth,
+        scoringHealth,
       };
     }
   }
 
-  async checkHealth(): Promise<GuardianRuntimeState["health"]> {
+  async checkHealth() {
     try {
       const health = await getGuardianHealth(this.organizationId);
       return {
@@ -122,14 +148,11 @@ export class GuardianRuntime {
         timestamp: health.timestamp,
       };
     } catch {
-      return {
-        status: "unknown",
-        timestamp: null,
-      };
+      return { status: "unknown", timestamp: null };
     }
   }
 
-  async checkRulesHealth(): Promise<GuardianRuntimeState["rulesHealth"]> {
+  async checkRulesHealth() {
     try {
       const health = await getGuardianRulesHealth(this.organizationId);
       return {
@@ -137,10 +160,19 @@ export class GuardianRuntime {
         timestamp: health.timestamp,
       };
     } catch {
+      return { status: "unknown", timestamp: null };
+    }
+  }
+
+  async checkScoringHealth() {
+    try {
+      const health = await getGuardianScoringHealth(this.organizationId);
       return {
-        status: "unknown",
-        timestamp: null,
+        status: health.status,
+        timestamp: health.timestamp,
       };
+    } catch {
+      return { status: "unknown", timestamp: null };
     }
   }
 }
