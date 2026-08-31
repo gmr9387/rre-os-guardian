@@ -10,9 +10,11 @@ export function useGuardian(organizationId: string) {
     risk: null,
     rules: null,
     scoring: null,
+    killSwitch: null,
     health: { status: "unknown", timestamp: null },
     rulesHealth: { status: "unknown", timestamp: null },
     scoringHealth: { status: "unknown", timestamp: null },
+    killSwitchHealth: { status: "unknown", timestamp: null },
   });
 
   const runtime = new GuardianRuntime(organizationId);
@@ -30,10 +32,16 @@ export function useGuardian(organizationId: string) {
     let cancelled = false;
 
     (async () => {
-      const [health, rulesHealth, scoringHealth] = await Promise.all([
+      const [
+        health,
+        rulesHealth,
+        scoringHealth,
+        killSwitchHealth,
+      ] = await Promise.all([
         runtime.checkHealth(),
         runtime.checkRulesHealth(),
         runtime.checkScoringHealth(),
+        runtime.checkKillSwitchHealth(),
       ]);
 
       if (!cancelled) {
@@ -42,6 +50,7 @@ export function useGuardian(organizationId: string) {
           health,
           rulesHealth,
           scoringHealth,
+          killSwitchHealth,
         }));
       }
     })();
