@@ -28,6 +28,14 @@ export type GuardianRuleEngineModel = {
   details?: Record<string, any>;
 };
 
+export type GuardianScoringModel = {
+  claimId: string;
+  organizationId: string;
+  riskScore: number;
+  riskTier: RiskTier;
+  weightedFlags: Record<string, number>;
+};
+
 export function mapRiskTier(score: number): RiskTier {
   if (score < 0.2) return "low";
   if (score < 0.5) return "medium";
@@ -80,5 +88,21 @@ export function buildGuardianRuleEngineModel(input: {
     riskScore: input.riskScore,
     riskTier: input.riskTier,
     details: input.details,
+  };
+}
+
+export function buildGuardianScoringModel(input: {
+  claimId: string;
+  organizationId: string;
+  riskScore: number;
+  riskTier: RiskTier;
+  weightedFlags: Record<string, number>;
+}): GuardianScoringModel {
+  return {
+    claimId: input.claimId,
+    organizationId: input.organizationId,
+    riskScore: input.riskScore,
+    riskTier: input.riskTier,
+    weightedFlags: input.weightedFlags,
   };
 }
