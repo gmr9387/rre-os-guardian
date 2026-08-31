@@ -4,9 +4,11 @@ import {
   runGuardianRisk,
   runGuardianRules,
   runGuardianScoring,
+  runGuardianKillSwitch,
   getGuardianHealth,
   getGuardianRulesHealth,
   getGuardianScoringHealth,
+  getGuardianKillSwitchHealth,
   GuardianRiskRequest,
 } from "../../integrations/guardian/api";
 
@@ -14,9 +16,11 @@ import {
   buildGuardianRiskModel,
   buildGuardianRuleEngineModel,
   buildGuardianScoringModel,
+  buildGuardianKillSwitchModel,
   GuardianRiskModel,
   GuardianRuleEngineModel,
   GuardianScoringModel,
+  GuardianKillSwitchModel,
   mapRiskTier,
 } from "./models";
 
@@ -26,16 +30,21 @@ export type GuardianRuntimeState = {
   risk: GuardianRiskModel | null;
   rules: GuardianRuleEngineModel | null;
   scoring: GuardianScoringModel | null;
+  killSwitch: GuardianKillSwitchModel | null;
   health: {
-    status: "healthy" | "degraded" | "down" | "unknown";
+    status: string;
     timestamp: string | null;
   };
   rulesHealth: {
-    status: "healthy" | "degraded" | "down" | "unknown";
+    status: string;
     timestamp: string | null;
   };
   scoringHealth: {
-    status: "healthy" | "degraded" | "down" | "unknown";
+    status: string;
+    timestamp: string | null;
+  };
+  killSwitchHealth: {
+    status: string;
     timestamp: string | null;
   };
 };
@@ -57,9 +66,11 @@ export class GuardianRuntime {
       risk: null,
       rules: null,
       scoring: null,
+      killSwitch: null,
       health: { status: "unknown", timestamp: null },
       rulesHealth: { status: "unknown", timestamp: null },
       scoringHealth: { status: "unknown", timestamp: null },
+      killSwitchHealth: { status: "unknown", timestamp: null },
     };
 
     try {
@@ -106,10 +117,25 @@ export class GuardianRuntime {
 
       const scoringModel = buildGuardianScoringModel(scoringResponse);
 
-      const [health, rulesHealth, scoringHealth] = await Promise.all([
+      const killSwitchResponse = await runGuardianKillSwitch({
+        claimId,
+        organizationId: this.organizationId,
+        riskTier: scoringResponse.riskTier,
+        flags: rulesResponse.flags,
+      });
+
+      const killSwitchModel = buildGuardianKillSwitchModel(killSwitchResponse);
+
+      const [
+        health,
+        rulesHealth,
+        scoringHealth,
+        killSwitchHealth,
+      ] = await Promise.all([
         this.checkHealth(),
         this.checkRulesHealth(),
         this.checkScoringHealth(),
+        this.checkKillSwitchHealth(),
       ]);
 
       return {
@@ -118,15 +144,23 @@ export class GuardianRuntime {
         risk: riskModel,
         rules: rulesModel,
         scoring: scoringModel,
+        killSwitch: killSwitchModel,
         health,
         rulesHealth,
         scoringHealth,
+        killSwitchHealth,
       };
     } catch (err: any) {
-      const [health, rulesHealth, scoringHealth] = await Promise.all([
+      const [
+        health,
+        rulesHealth,
+        scoringHealth,
+        killSwitchHealth,
+      ] = await Promise.all([
         this.checkHealth(),
         this.checkRulesHealth(),
         this.checkScoringHealth(),
+        this.checkKillSwitchHealth(),
       ]);
 
       return {
@@ -136,6 +170,7 @@ export class GuardianRuntime {
         health,
         rulesHealth,
         scoringHealth,
+        killSwitchHealth,
       };
     }
   }
@@ -167,6 +202,18 @@ export class GuardianRuntime {
   async checkScoringHealth() {
     try {
       const health = await getGuardianScoringHealth(this.organizationId);
+      return {
+        status: health.status,
+        timestamp: health.timestamp,
+      };
+    } catch {
+      return { status: "unknown", timestamp: null };
+    }
+  }
+
+  async checkKillSwitchHealth() {
+    try {
+      const health = await getGuardianKillSwitchHealth(this.organizationId);
       return {
         status: health.status,
         timestamp: health.timestamp,
