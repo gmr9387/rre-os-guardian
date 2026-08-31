@@ -1,7 +1,12 @@
 // src/test/guardian.test.ts
 
 import { describe, it, expect } from "vitest";
-import { mapRiskTier, normalizeFlags, buildGuardianRiskModel } from "../lib/guardian/models";
+import {
+  mapRiskTier,
+  normalizeFlags,
+  buildGuardianRiskModel,
+  buildGuardianRuleEngineModel,
+} from "../lib/guardian/models";
 
 describe("Guardian models", () => {
   it("maps risk tier from score", () => {
@@ -32,4 +37,25 @@ describe("Guardian models", () => {
     expect(model.flags[0].code).toBe("fraud_suspected");
     expect(model.details?.foo).toBe("bar");
   });
-});
+
+  it("builds rule engine model", () => {
+    const model = buildGuardianRuleEngineModel({
+      claimId: "CLAIM-456",
+      organizationId: "ORG-1",
+      rulesEvaluated: 3,
+      passed: ["highCostRule"],
+      failed: ["missingDiagnosisRule"],
+      flags: ["missing_diagnosis_codes"],
+      riskScore: 0.6,
+      riskTier: "high",
+      details: { bar: "baz" },
+    });
+
+    expect(model.claimId).toBe("CLAIM-456");
+    expect(model.organizationId).toBe("ORG-1");
+    expect(model.rulesEvaluated).toBe(3);
+    expect(model.failed[0]).toBe("missingDiagnosisRule");
+    expect(model.flags[0].code).toBe("missing_diagnosis_codes");
+    expect(model.details?.bar).toBe("baz");
+  });
+}
