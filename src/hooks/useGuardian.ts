@@ -11,10 +11,12 @@ export function useGuardian(organizationId: string) {
     rules: null,
     scoring: null,
     killSwitch: null,
+    repair: null,
     health: { status: "unknown", timestamp: null },
     rulesHealth: { status: "unknown", timestamp: null },
     scoringHealth: { status: "unknown", timestamp: null },
     killSwitchHealth: { status: "unknown", timestamp: null },
+    repairHealth: { status: "unknown", timestamp: null },
   });
 
   const runtime = new GuardianRuntime(organizationId);
@@ -37,11 +39,13 @@ export function useGuardian(organizationId: string) {
         rulesHealth,
         scoringHealth,
         killSwitchHealth,
+        repairHealth,
       ] = await Promise.all([
         runtime.checkHealth(),
         runtime.checkRulesHealth(),
         runtime.checkScoringHealth(),
         runtime.checkKillSwitchHealth(),
+        runtime.checkRepairHealth(),
       ]);
 
       if (!cancelled) {
@@ -51,6 +55,7 @@ export function useGuardian(organizationId: string) {
           rulesHealth,
           scoringHealth,
           killSwitchHealth,
+          repairHealth,
         }));
       }
     })();
