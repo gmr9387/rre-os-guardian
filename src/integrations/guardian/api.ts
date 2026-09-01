@@ -1,132 +1,31 @@
 // src/integrations/guardian/api.ts
 
-export type GuardianRiskRequest = {
+// ... keep existing types from Phase 4 and add:
+
+export type GuardianRepairResponse = {
   claimId: string;
   organizationId: string;
-  payload: Record<string, any>;
+  repairedClaimPayload: Record<string, any>;
+  repairLineage: {
+    claimId: string;
+    organizationId: string;
+    timestamp: string;
+    diffs: { path: string; before: any; after: any }[];
+    notes: string[];
+  };
 };
 
-export type GuardianRiskResponse = {
-  claimId: string;
-  riskScore: number;
-  riskTier: "low" | "medium" | "high" | "critical";
-  flags: string[];
-  details?: Record<string, any>;
-};
+// keep GUARDIAN_BASE_URL + handleResponse + existing functions
 
-export type GuardianRuleEngineResponse = {
-  claimId: string;
-  organizationId: string;
-  rulesEvaluated: number;
-  passed: string[];
-  failed: string[];
-  flags: string[];
-  riskScore: number;
-  riskTier: "low" | "medium" | "high" | "critical";
-  details?: Record<string, any>;
-};
-
-export type GuardianScoringResponse = {
-  claimId: string;
-  organizationId: string;
-  riskScore: number;
-  riskTier: "low" | "medium" | "high" | "critical";
-  weightedFlags: Record<string, number>;
-};
-
-export type GuardianKillSwitchResponse = {
-  claimId: string;
-  organizationId: string;
-  decision: "ALLOW" | "ADVISORY" | "SOFT_STOP" | "HARD_STOP";
-  reason: string;
-  flags: string[];
-  timestamp: string;
-};
-
-export type GuardianHealthResponse = {
-  status: "healthy" | "degraded" | "down";
-  runtime: string;
-  timestamp: string;
-};
-
-const GUARDIAN_BASE_URL =
-  import.meta.env.VITE_GUARDIAN_BASE_URL || "https://api.valtaris.local";
-
-async function handleResponse<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Guardian API error: ${res.status} ${res.statusText} - ${text}`
-    );
-  }
-  return res.json() as Promise<T>;
-}
-
-export async function runGuardianRisk(
-  request: GuardianRiskRequest
-): Promise<GuardianRiskResponse> {
-  const res = await fetch(`${GUARDIAN_BASE_URL}/guardian/risk/run`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-org-id": request.organizationId,
-    },
-    body: JSON.stringify(request.payload),
-  });
-
-  return handleResponse<GuardianRiskResponse>(res);
-}
-
-export async function runGuardianRules(
-  request: GuardianRiskRequest
-): Promise<GuardianRuleEngineResponse> {
-  const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/rules/evaluate`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-org-id": request.organizationId,
-      },
-      body: JSON.stringify({
-        claimId: request.claimId,
-        payload: request.payload,
-      }),
-    }
-  );
-
-  return handleResponse<GuardianRuleEngineResponse>(res);
-}
-
-export async function runGuardianScoring(request: {
-  claimId: string;
-  organizationId: string;
-  flags: string[];
-  baseScore?: number;
-}): Promise<GuardianScoringResponse> {
-  const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/scoring/run`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-org-id": request.organizationId,
-      },
-      body: JSON.stringify(request),
-    }
-  );
-
-  return handleResponse<GuardianScoringResponse>(res);
-}
-
-export async function runGuardianKillSwitch(request: {
+export async function runGuardianRepair(request: {
   claimId: string;
   organizationId: string;
   riskTier: string;
   flags: string[];
-}): Promise<GuardianKillSwitchResponse> {
+  claimPayload: Record<string, any>;
+}): Promise<GuardianRepairResponse> {
   const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/kill-switch/run`,
+    `${GUARDIAN_BASE_URL}/guardian/risk/repair/run`,
     {
       method: "POST",
       headers: {
@@ -137,56 +36,14 @@ export async function runGuardianKillSwitch(request: {
     }
   );
 
-  return handleResponse<GuardianKillSwitchResponse>(res);
+  return handleResponse<GuardianRepairResponse>(res);
 }
 
-export async function getGuardianHealth(
-  organizationId: string
-): Promise<GuardianHealthResponse> {
-  const res = await fetch(`${GUARDIAN_BASE_URL}/guardian/risk/health`, {
-    method: "GET",
-    headers: {
-      "x-org-id": organizationId,
-    },
-  });
-
-  return handleResponse<GuardianHealthResponse>(res);
-}
-
-export async function getGuardianRulesHealth(
-  organizationId: string
-): Promise<GuardianHealthResponse> {
-  const res = await fetch(`${GUARDIAN_BASE_URL}/guardian/risk/rules/health`, {
-    method: "GET",
-    headers: {
-      "x-org-id": organizationId,
-    },
-  });
-
-  return handleResponse<GuardianHealthResponse>(res);
-}
-
-export async function getGuardianScoringHealth(
+export async function getGuardianRepairHealth(
   organizationId: string
 ): Promise<GuardianHealthResponse> {
   const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/scoring/health`,
-    {
-      method: "GET",
-      headers: {
-        "x-org-id": organizationId,
-      },
-    }
-  );
-
-  return handleResponse<GuardianHealthResponse>(res);
-}
-
-export async function getGuardianKillSwitchHealth(
-  organizationId: string
-): Promise<GuardianHealthResponse> {
-  const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/kill-switch/health`,
+    `${GUARDIAN_BASE_URL}/guardian/risk/repair/health`,
     {
       method: "GET",
       headers: {
