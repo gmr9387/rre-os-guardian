@@ -1,31 +1,47 @@
 // src/integrations/guardian/api.ts
+// add lifecycle support (full file if you prefer, here is the lifecycle part)
 
-// ... keep existing types from Phase 4 and add:
-
-export type GuardianRepairResponse = {
+export type GuardianLifecycleResponse = {
   claimId: string;
   organizationId: string;
-  repairedClaimPayload: Record<string, any>;
-  repairLineage: {
-    claimId: string;
-    organizationId: string;
-    timestamp: string;
-    diffs: { path: string; before: any; after: any }[];
-    notes: string[];
+  unifiedClaim: {
+    originalClaimPayload: Record<string, any>;
+    repairedClaimPayload: Record<string, any> | null;
+    lifecycleState:
+      | "INGESTED"
+      | "EVALUATED"
+      | "REPAIRED"
+      | "ENFORCED"
+      | "FINALIZED"
+      | "REOPENED";
+    lifecycleEvents: {
+      from:
+        | "INGESTED"
+        | "EVALUATED"
+        | "REPAIRED"
+        | "ENFORCED"
+        | "FINALIZED"
+        | "REOPENED";
+      to:
+        | "INGESTED"
+        | "EVALUATED"
+        | "REPAIRED"
+        | "ENFORCED"
+        | "FINALIZED"
+        | "REOPENED";
+      timestamp: string;
+      reason: string;
+    }[];
   };
 };
 
-// keep GUARDIAN_BASE_URL + handleResponse + existing functions
-
-export async function runGuardianRepair(request: {
+export async function runGuardianLifecycle(request: {
   claimId: string;
   organizationId: string;
-  riskTier: string;
-  flags: string[];
   claimPayload: Record<string, any>;
-}): Promise<GuardianRepairResponse> {
+}): Promise<GuardianLifecycleResponse> {
   const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/repair/run`,
+    `${GUARDIAN_BASE_URL}/guardian/claim/lifecycle/run`,
     {
       method: "POST",
       headers: {
@@ -36,14 +52,14 @@ export async function runGuardianRepair(request: {
     }
   );
 
-  return handleResponse<GuardianRepairResponse>(res);
+  return handleResponse<GuardianLifecycleResponse>(res);
 }
 
-export async function getGuardianRepairHealth(
+export async function getGuardianLifecycleHealth(
   organizationId: string
 ): Promise<GuardianHealthResponse> {
   const res = await fetch(
-    `${GUARDIAN_BASE_URL}/guardian/risk/repair/health`,
+    `${GUARDIAN_BASE_URL}/guardian/claim/lifecycle/health`,
     {
       method: "GET",
       headers: {
