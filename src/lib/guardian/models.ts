@@ -1,54 +1,62 @@
 // src/lib/guardian/models.ts
+// add lifecycle model
 
-// ... keep existing RiskTier, GuardianFlag, Risk/Rules/Scoring/KillSwitch models
+export type GuardianLifecycleState =
+  | "INGESTED"
+  | "EVALUATED"
+  | "REPAIRED"
+  | "ENFORCED"
+  | "FINALIZED"
+  | "REOPENED";
 
-export type GuardianRepairDiffModel = {
-  path: string;
-  before: any;
-  after: any;
-};
-
-export type GuardianRepairLineageModel = {
-  claimId: string;
-  organizationId: string;
+export type GuardianLifecycleEventModel = {
+  from: GuardianLifecycleState;
+  to: GuardianLifecycleState;
   timestamp: string;
-  diffs: GuardianRepairDiffModel[];
-  notes: string[];
+  reason: string;
 };
 
-export type GuardianRepairModel = {
-  claimId: string;
-  organizationId: string;
-  repairedClaimPayload: Record<string, any>;
-  repairLineage: GuardianRepairLineageModel;
+export type GuardianUnifiedClaimModel = {
+  originalClaimPayload: Record<string, any>;
+  repairedClaimPayload: Record<string, any> | null;
+  lifecycleState: GuardianLifecycleState;
+  lifecycleEvents: GuardianLifecycleEventModel[];
 };
 
-export function buildGuardianRepairModel(input: {
+export type GuardianLifecycleModel = {
   claimId: string;
   organizationId: string;
-  repairedClaimPayload: Record<string, any>;
-  repairLineage: {
-    claimId: string;
-    organizationId: string;
-    timestamp: string;
-    diffs: { path: string; before: any; after: any }[];
-    notes: string[];
+  unifiedClaim: GuardianUnifiedClaimModel;
+};
+
+export function buildGuardianLifecycleModel(input: {
+  claimId: string;
+  organizationId: string;
+  unifiedClaim: {
+    originalClaimPayload: Record<string, any>;
+    repairedClaimPayload: Record<string, any> | null;
+    lifecycleState: GuardianLifecycleState;
+    lifecycleEvents: {
+      from: GuardianLifecycleState;
+      to: GuardianLifecycleState;
+      timestamp: string;
+      reason: string;
+    }[];
   };
-}): GuardianRepairModel {
+}): GuardianLifecycleModel {
   return {
     claimId: input.claimId,
     organizationId: input.organizationId,
-    repairedClaimPayload: input.repairedClaimPayload,
-    repairLineage: {
-      claimId: input.repairLineage.claimId,
-      organizationId: input.repairLineage.organizationId,
-      timestamp: input.repairLineage.timestamp,
-      diffs: input.repairLineage.diffs.map((d) => ({
-        path: d.path,
-        before: d.before,
-        after: d.after,
+    unifiedClaim: {
+      originalClaimPayload: input.unifiedClaim.originalClaimPayload,
+      repairedClaimPayload: input.unifiedClaim.repairedClaimPayload,
+      lifecycleState: input.unifiedClaim.lifecycleState,
+      lifecycleEvents: input.unifiedClaim.lifecycleEvents.map((e) => ({
+        from: e.from,
+        to: e.to,
+        timestamp: e.timestamp,
+        reason: e.reason,
       })),
-      notes: [...input.repairLineage.notes],
     },
   };
 }
